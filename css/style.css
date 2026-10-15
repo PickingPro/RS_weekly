@@ -18,6 +18,8 @@ body {
     radial-gradient(900px 500px at 100% 0%, rgba(80,120,255,.10), transparent 60%),
     var(--bg);
 }
+select option, select optgroup { background: var(--card); color: var(--text); }
+
 header {
   position: sticky;
   top: 0;
@@ -39,7 +41,6 @@ header h1 {
   letter-spacing: .04em;
 }
 header h1 .game { color: var(--accent); font-weight: 800; }
-header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margin-left: 10px; }
 #clearBtn {
   cursor: pointer;
   border: none;
@@ -56,7 +57,7 @@ header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margi
 #clearBtn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(224,70,60,.5); }
 #clearBtn:active { transform: translateY(0); }
 
-/* 一括追加バー */
+/* 追加バー */
 .bulk-row {
   display: flex;
   flex-direction: column;
@@ -84,7 +85,7 @@ header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margi
   color: var(--muted);
   white-space: nowrap;
 }
-#bulkName, #accountName, #bulkAccount {
+#bulkName, #accountName, #bulkAccount, #suppName, #suppAccount {
   padding: 8px 12px;
   font-size: .92rem;
   color: var(--text);
@@ -93,18 +94,21 @@ header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margi
   border-radius: 8px;
   outline: none;
 }
-#bulkName, #accountName {
+#bulkName, #accountName, #suppName {
   flex: 1 1 200px;
   min-width: 140px;
   max-width: 320px;
 }
-#bulkAccount {
+#bulkAccount, #suppAccount {
   flex: none;
-  max-width: 200px;
+  max-width: 220px;
   cursor: pointer;
 }
-#bulkName:focus, #accountName:focus, #bulkAccount:focus { border-color: var(--accent); }
-#bulkName::placeholder, #accountName::placeholder { color: var(--muted); }
+#bulkName:focus, #accountName:focus, #bulkAccount:focus,
+#suppName:focus, #suppAccount:focus { border-color: var(--accent); }
+#bulkName::placeholder, #accountName::placeholder, #suppName::placeholder { color: var(--muted); }
+select.is-empty { color: var(--muted); }
+
 #bulkTargets {
   display: flex;
   flex-wrap: wrap;
@@ -147,7 +151,7 @@ header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margi
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
-#bulkAdd, #accountAdd {
+#bulkAdd, #accountAdd, #suppAdd {
   cursor: pointer;
   border: none;
   padding: 8px 18px;
@@ -157,9 +161,28 @@ header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margi
   color: #fff;
   white-space: nowrap;
 }
-#bulkAdd { background: linear-gradient(135deg, #3f7bf5, #5a4df0); }
+#bulkAdd, #suppAdd { background: linear-gradient(135deg, #3f7bf5, #5a4df0); }
 #accountAdd { background: linear-gradient(135deg, #2fb67c, #1f8f9a); }
-#bulkAdd:hover, #accountAdd:hover { filter: brightness(1.1); }
+#bulkAdd:hover, #accountAdd:hover, #suppAdd:hover { filter: brightness(1.1); }
+
+/* エクスポート/インポート(キャラ追加行の右端) */
+.io-buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.btn-io {
+  cursor: pointer;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.3);
+  white-space: nowrap;
+}
+.btn-io:hover { background: rgba(255,255,255,.1); }
 
 main {
   max-width: 1500px;
@@ -196,7 +219,7 @@ main {
 }
 .section-name {
   flex: 1;
-  min-width: 120px;
+  min-width: 100px;
   font-size: 1.15rem;
   font-weight: 700;
   color: var(--c);
@@ -207,6 +230,23 @@ main {
   outline: none;
 }
 .section-name:hover, .section-name:focus { border-bottom-color: var(--c); }
+.section-name.fixed, .section-name.fixed:hover, .section-name.fixed:focus {
+  cursor: default;
+  border-bottom-color: transparent;
+}
+.section-pick {
+  flex: 0 1 220px;
+  min-width: 120px;
+  max-width: 240px;
+  padding: 5px 8px;
+  font-size: .85rem;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--c);
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+}
 .section-progress {
   font-size: .85rem;
   color: var(--muted);
@@ -223,6 +263,11 @@ main {
   border-radius: 6px;
 }
 .btn-del:hover { color: #fff; background: rgba(255,255,255,.1); }
+.empty-hint {
+  margin: 4px 2px;
+  color: var(--muted);
+  font-size: .82rem;
+}
 
 /* アカウントごとのサブセクション */
 .account {
@@ -263,16 +308,9 @@ main {
 .chars {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px 8px;
   min-height: 40px;
   border-radius: 8px;
-}
-.chars:empty::after {
-  content: "上部の一括追加バーから追加できます";
-  grid-column: 1 / -1;
-  color: var(--muted);
-  font-size: .8rem;
-  padding: 8px 2px;
 }
 .chars.drop-end { outline: 2px dashed var(--c); outline-offset: 2px; }
 
@@ -351,18 +389,41 @@ main {
 .char.done .char-name { text-decoration: line-through; }
 .char-name::placeholder { color: var(--muted); }
 
-/* カード右上の操作ボタン(ホバー時のみ表示) */
+/* タビアクートの数字入力(2桁まで) */
+.char-num {
+  flex: none;
+  width: 2.5em;
+  padding: 3px 2px;
+  font-size: .85rem;
+  text-align: center;
+  color: var(--text);
+  background: rgba(0,0,0,.3);
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 5px;
+  outline: none;
+}
+.char-num:focus { border-color: var(--c); }
+.char-num::placeholder { color: var(--muted); }
+
+/* カード上端に出る操作ボタン(ホバー時のみ表示) */
 .char-actions {
   position: absolute;
-  top: 1px;
-  right: 1px;
+  top: -10px;
+  right: 6px;
+  z-index: 3;
   display: flex;
-  gap: 1px;
-  opacity: 0;
+  gap: 2px;
+  padding: 1px 3px;
+  background: var(--bg2);
+  border: 1px solid rgba(255,255,255,.2);
   border-radius: 6px;
-  background: inherit;
+  opacity: 0;
+  pointer-events: none;
 }
-.char:hover .char-actions, .char:focus-within .char-actions { opacity: 1; }
+.char:hover .char-actions, .char:focus-within .char-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
 .char-actions button {
   cursor: pointer;
   border: none;
@@ -389,6 +450,100 @@ main {
   transition: all .15s;
 }
 #addSection:hover { color: #fff; border-color: #fff; background: rgba(255,255,255,.06); transform: scale(1.06); }
+
+/* 補足情報 */
+.supp {
+  --c: #9aa3c7;
+  padding: 16px 18px 18px;
+  background: var(--bg2);
+  border: 2px solid var(--c);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25), inset 0 0 40px color-mix(in srgb, var(--c) 8%, transparent);
+}
+.supp-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+}
+.supp-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--c);
+}
+.supp-add {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-left: auto;
+}
+#suppList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.supp-account {
+  padding: 10px 12px 6px;
+  background: rgba(0,0,0,.18);
+  border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
+  border-radius: 10px;
+  min-width: 0;
+}
+.supp-account-title {
+  margin: 0 0 6px;
+  font-size: .95rem;
+  font-weight: 700;
+}
+.supp-row {
+  display: grid;
+  grid-template-columns: minmax(4em, 9em) 5.4em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px dashed rgba(255,255,255,.1);
+}
+.supp-name {
+  font-size: .88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.supp-month {
+  width: 100%;
+  padding: 5px 4px;
+  font-size: .82rem;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+}
+.supp-memo {
+  display: block;
+  width: 100%;
+  height: 2.7em;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: .88rem;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 6px;
+  outline: none;
+  resize: none;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.supp-month:focus, .supp-memo:focus { border-color: var(--c); }
+.supp-memo::placeholder { color: var(--muted); }
 
 /* 初期化ボタン(フローティングアクションボタン) */
 #resetFab {
@@ -429,7 +584,7 @@ main {
 #modal.open { display: flex; }
 .dialog {
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   padding: 24px;
   background: var(--bg2);
   border: 1px solid rgba(255,255,255,.12);
@@ -460,23 +615,29 @@ main {
 }
 #modalOk:hover { filter: brightness(1.12); }
 
+/* 画面の高さが低いときはヘッダーを固定しない */
+@media (max-height: 700px) {
+  header { position: static; }
+}
 @media (max-width: 900px) {
   #sections { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 720px) {
   header { padding: 10px 14px; }
   header h1 { font-size: 1rem; }
-  header h1 .sub { display: none; }
   .bulk-row { padding: 8px 10px; }
   .bulk-title { min-width: 0; }
+  .io-buttons { margin-left: 0; }
   main { padding: 16px 8px 100px; }
-  .section { padding: 12px 10px 14px; }
+  .section, .supp { padding: 12px 10px 14px; }
   .account { padding: 8px 8px 10px; }
-  .chars { gap: 6px; }
+  .chars { gap: 10px 6px; }
   .char { padding: 6px 4px 6px 6px; gap: 4px; }
   .drag-handle { margin: -6px 0 -6px -6px; width: 8px; }
   .char-name { font-size: .75rem; }
+  .char-num { width: 2.2em; font-size: .75rem; }
   .char input[type=checkbox] { width: 16px; height: 16px; }
   .char input[type=checkbox]:checked::after { left: 3.5px; top: 0; width: 4px; height: 8px; }
+  .supp-row { grid-template-columns: minmax(3em, 6em) 5em minmax(0, 1fr) auto; gap: 6px; }
   #resetFab { right: 16px; bottom: 16px; padding: 12px 18px; font-size: .88rem; }
 }
