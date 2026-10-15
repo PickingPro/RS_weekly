@@ -5,6 +5,7 @@
   --text: #e8eaf2;
   --muted: #8b90a5;
   --accent: #e0463c;
+  --leader: #f5b73f;
 }
 * { box-sizing: border-box; }
 body {
@@ -22,7 +23,7 @@ header {
   top: 0;
   z-index: 10;
   padding: 12px 28px;
-  background: rgba(20,22,29,.9);
+  background: rgba(20,22,29,.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(255,255,255,.08);
 }
@@ -58,25 +59,32 @@ header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margi
 /* 一括追加バー */
 .bulk-row {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 14px;
+  flex-direction: column;
+  gap: 8px;
   margin-top: 10px;
   padding: 10px 14px;
   background: var(--bg2);
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px;
 }
+.bulk-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.bulk-line + .bulk-line {
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255,255,255,.1);
+}
 .bulk-title {
+  min-width: 6.5em;
   font-size: .85rem;
   font-weight: 700;
   color: var(--muted);
   white-space: nowrap;
 }
-#bulkName {
-  flex: 1 1 200px;
-  min-width: 140px;
-  max-width: 320px;
+#bulkName, #accountName, #bulkAccount {
   padding: 8px 12px;
   font-size: .92rem;
   color: var(--text);
@@ -85,8 +93,18 @@ header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margi
   border-radius: 8px;
   outline: none;
 }
-#bulkName:focus { border-color: var(--accent); }
-#bulkName::placeholder { color: var(--muted); }
+#bulkName, #accountName {
+  flex: 1 1 200px;
+  min-width: 140px;
+  max-width: 320px;
+}
+#bulkAccount {
+  flex: none;
+  max-width: 200px;
+  cursor: pointer;
+}
+#bulkName:focus, #accountName:focus, #bulkAccount:focus { border-color: var(--accent); }
+#bulkName::placeholder, #accountName::placeholder { color: var(--muted); }
 #bulkTargets {
   display: flex;
   flex-wrap: wrap;
@@ -105,6 +123,7 @@ header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margi
   cursor: pointer;
   user-select: none;
 }
+.target.leader-toggle { --c: var(--leader); font-weight: 700; }
 .target input {
   appearance: none;
   -webkit-appearance: none;
@@ -128,7 +147,7 @@ header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margi
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
-#bulkAdd {
+#bulkAdd, #accountAdd {
   cursor: pointer;
   border: none;
   padding: 8px 18px;
@@ -136,10 +155,11 @@ header h1 .sub { color: var(--muted); font-size: .85rem; font-weight: 500; margi
   font-size: .88rem;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #3f7bf5, #5a4df0);
   white-space: nowrap;
 }
-#bulkAdd:hover { filter: brightness(1.1); }
+#bulkAdd { background: linear-gradient(135deg, #3f7bf5, #5a4df0); }
+#accountAdd { background: linear-gradient(135deg, #2fb67c, #1f8f9a); }
+#bulkAdd:hover, #accountAdd:hover { filter: brightness(1.1); }
 
 main {
   max-width: 1500px;
@@ -192,19 +212,6 @@ main {
   color: var(--muted);
   white-space: nowrap;
 }
-.btn-add-char {
-  cursor: pointer;
-  border: 1px solid var(--c);
-  background: transparent;
-  color: var(--c);
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: .85rem;
-  font-weight: 700;
-  transition: background .15s, color .15s;
-  white-space: nowrap;
-}
-.btn-add-char:hover { background: var(--c); color: #111; }
 .btn-del {
   cursor: pointer;
   border: none;
@@ -217,19 +224,58 @@ main {
 }
 .btn-del:hover { color: #fff; background: rgba(255,255,255,.1); }
 
+/* アカウントごとのサブセクション */
+.account {
+  margin-top: 12px;
+  padding: 10px 12px 12px;
+  background: rgba(0,0,0,.18);
+  border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
+  border-radius: 10px;
+}
+.account:first-of-type { margin-top: 0; }
+.account-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.account-name {
+  flex: 1;
+  min-width: 0;
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed transparent;
+  padding: 2px;
+  outline: none;
+}
+.account-name:hover, .account-name:focus { border-bottom-color: var(--c); }
+.account-progress {
+  font-size: .78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.account .btn-del { font-size: .9rem; }
+
 /* キャラクターは1行5人 */
 .chars {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+  min-height: 40px;
+  border-radius: 8px;
 }
 .chars:empty::after {
-  content: "「キャラクター追加」でキャラクターを登録してください";
+  content: "上部の一括追加バーから追加できます";
   grid-column: 1 / -1;
   color: var(--muted);
-  font-size: .85rem;
+  font-size: .8rem;
   padding: 8px 2px;
 }
+.chars.drop-end { outline: 2px dashed var(--c); outline-offset: 2px; }
+
 .char {
   position: relative;
   display: flex;
@@ -238,12 +284,35 @@ main {
   min-width: 0;
   background: var(--card);
   border: 1px solid rgba(255,255,255,.07);
-  border-left: 4px solid var(--c);
   border-radius: 8px;
   padding: 8px;
   transition: opacity .15s, background .15s;
 }
 .char.done { opacity: .5; background: color-mix(in srgb, var(--c) 12%, var(--card)); }
+
+/* 引率キャラ: 背景を金色系に */
+.char.leader,
+.char.leader.done {
+  background: linear-gradient(135deg, #6e5514, #4d3b0e);
+  border-color: rgba(245,183,63,.75);
+}
+.char.leader .char-name { color: #ffe9a8; }
+
+/* ドラッグ用ハンドル(カード左端の帯) */
+.drag-handle {
+  flex: none;
+  align-self: stretch;
+  width: 10px;
+  margin: -8px 0 -8px -8px;
+  border-radius: 7px 0 0 7px;
+  background: radial-gradient(rgba(0,0,0,.5) 1px, transparent 1.6px) center / 5px 6px, var(--c);
+  cursor: grab;
+}
+.drag-handle:active { cursor: grabbing; }
+.char.dragging { opacity: .3; }
+.char.drop-before { box-shadow: -4px 0 0 0 #fff; }
+.char.drop-after { box-shadow: 4px 0 0 0 #fff; }
+
 .char input[type=checkbox] {
   appearance: none;
   -webkit-appearance: none;
@@ -281,16 +350,31 @@ main {
 }
 .char.done .char-name { text-decoration: line-through; }
 .char-name::placeholder { color: var(--muted); }
-.char .btn-del {
+
+/* カード右上の操作ボタン(ホバー時のみ表示) */
+.char-actions {
   position: absolute;
   top: 1px;
   right: 1px;
-  font-size: .7rem;
-  padding: 2px 4px;
+  display: flex;
+  gap: 1px;
   opacity: 0;
-  background: var(--card);
+  border-radius: 6px;
+  background: inherit;
 }
-.char:hover .btn-del, .char:focus-within .btn-del { opacity: 1; }
+.char:hover .char-actions, .char:focus-within .char-actions { opacity: 1; }
+.char-actions button {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: .7rem;
+  line-height: 1;
+  padding: 3px 4px;
+  border-radius: 5px;
+}
+.char-actions button:hover { color: #fff; background: rgba(255,255,255,.15); }
+.char-actions .btn-leader.on { color: var(--leader); font-weight: 700; }
 
 #addSection {
   align-self: center;
@@ -312,20 +396,20 @@ main {
   right: 24px;
   bottom: 24px;
   z-index: 20;
-  width: 56px;
-  height: 56px;
+  padding: 14px 24px;
   border: none;
-  border-radius: 50%;
+  border-radius: 999px;
   cursor: pointer;
-  font-size: 1.6rem;
-  line-height: 1;
+  font-size: .95rem;
+  font-weight: 700;
+  letter-spacing: .08em;
   color: #fff;
   background: linear-gradient(135deg, #5a5f78, #3a3e52);
   box-shadow: 0 6px 18px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.12);
   transition: transform .15s, background .15s, box-shadow .15s;
 }
 #resetFab:hover {
-  transform: scale(1.08) rotate(-30deg);
+  transform: scale(1.06);
   background: linear-gradient(135deg, #e0463c, #b82d4a);
   box-shadow: 0 8px 22px rgba(224,70,60,.5);
 }
@@ -384,12 +468,15 @@ main {
   header h1 { font-size: 1rem; }
   header h1 .sub { display: none; }
   .bulk-row { padding: 8px 10px; }
+  .bulk-title { min-width: 0; }
   main { padding: 16px 8px 100px; }
   .section { padding: 12px 10px 14px; }
+  .account { padding: 8px 8px 10px; }
   .chars { gap: 6px; }
   .char { padding: 6px 4px 6px 6px; gap: 4px; }
+  .drag-handle { margin: -6px 0 -6px -6px; width: 8px; }
   .char-name { font-size: .75rem; }
   .char input[type=checkbox] { width: 16px; height: 16px; }
   .char input[type=checkbox]:checked::after { left: 3.5px; top: 0; width: 4px; height: 8px; }
-  #resetFab { right: 16px; bottom: 16px; width: 50px; height: 50px; }
+  #resetFab { right: 16px; bottom: 16px; padding: 12px 18px; font-size: .88rem; }
 }
