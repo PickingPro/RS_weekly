@@ -1,18 +1,30 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "RS_weekly_v1";
+  var DB_NAME = "RS_weekly_db";
+  var STORE = "kv";
+  var REC_KEY = "state";
+
   // セクションごとに枠線の色を分けるためのパレット
   var COLORS = ["#e0463c", "#3fa9f5", "#4ccf8a", "#f5b73f", "#b074f5", "#f56fa8", "#3fd6d0", "#f58a3f"];
 
-  // 一括追加の対象週課の選択状態(セクションID → true/false)。未設定は選択済み扱い
-  var selected = {};
-  // 一括追加の追加先アカウント
-  var bulkAccountId = null;
-  // ドラッグ中の情報 { sid, cid }
-  var drag = null;
+  // 必須セクション(削除不可・名称固定)
+  var REQUIRED = [
+    { key: "hyperion", name: "ヒペリオン", color: 0 },
+    { key: "tabiakuto", name: "タビアクート", color: 1 }
+  ];
 
-  var state = load();
+  var state = null;
+  var db = null;
+  var saveChain = Promise.resolve();
+  var saveWarned = false;
+  var modalAction = null;
+
+  // 以下は保存しない(画面を開いている間だけ保持する)選択状態
+  var selected = {};        // 一括追加の対象週課(未設定は選択済み扱い)
+  var bulkAccountId = "";   // キャラ一括追加の追加先アカウント
+  var suppAccountId = "";   // 補足情報エリアの追加先アカウント
+  var drag = null;          // ドラッグ中の情報 { sid, cid, aid }
 
   function $(id) { return document.getElementById(id); }
 
@@ -20,50 +32,136 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
 
-  function defaultState() {
-    return {
-      accounts: [{ id: uid(), name: "アカウント1" }],
-      sections: [
-        { id: uid(), name: "ヒペリオン", color: 0, chars: [] },
-        { id: uid(), name: "タビアクート", color: 1, chars: [] }
-      ]
-    };
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
   }
 
-  // 旧バージョンのデータ(アカウントなし)も読み込めるように整える
-  function normalize(d) {
-    if (!Array.isArray(d.accounts) || !d.accounts.length) {
-      d.accounts = [{ id: uid(), name: "アカウント1" }];
-    }
-    var ids = {};
-    d.accounts.forEach(function (a) { ids[a.id] = true; });
-    var first = d.accounts[0].id;
-    d.sections.forEach(function (s) {
-      if (!Array.isArray(s.chars)) s.chars = [];
-      s.chars.forEach(function (c) {
-        if (!c.accountId || !ids[c.accountId]) c.accountId = first;
-        c.leader = !!c.leader;
-        c.checked = !!c.checked;
-      });
+  function toHalf(s) {
+    return String(s).replace(/[０-９]/g, function (ch) {
+      return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
     });
-    return d;
   }
 
-  function load() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        var d = JSON.parse(raw);
-        if (d && Array.isArray(d.sections)) return normalize(d);
-      }
-    } catch (e) {}
-    return defaultState();
+  /* ================= IndexedDB ================= */
+  function openDB() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) { reject(new Error("IndexedDB unavailable")); return; }
+      var r = indexedDB.open(DB_NAME, 1);
+      r.onupgradeneeded = function () {
+        if (!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE);
+      };
+      r.onsuccess = function () { resolve(r.result); };
+      r.onerror = function () { reject(r.error); };
+    });
+  }
+
+  function idbRun(mode, fn) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(STORE, mode);
+      var req = fn(tx.objectStore(STORE));
+      tx.oncomplete = function () { resolve(req ? req.result : undefined); };
+      tx.onerror = tx.onabort = function () { reject(tx.error); };
+    });
+  }
+
+  function warnSave(e) {
+    console.error(e);
+    if (!saveWarned) {
+      saveWarned = true;
+      alert("データを保存できませんでした。ブラウザの設定やストレージの空き容量を確認し、エクスポートでバックアップを取ってください。");
+    }
   }
 
   function save() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) {}
+    if (!db) return;
+    var snap = JSON.stringify(state);
+    saveChain = saveChain.then(function () {
+      return idbRun("readwrite", function (s) { return s.put(JSON.parse(snap), REC_KEY); });
+    }).catch(warnSave);
+  }
+
+  function wipeStorage() {
+    if (!db) return;
+    saveChain = saveChain.then(function () {
+      return idbRun("readwrite", function (s) { return s.clear(); });
+    }).catch(warnSave);
+  }
+
+  /* ================= 状態 ================= */
+  // 保存データ・インポートデータを安全な形に整える
+  function normalize(d) {
+    if (!d || typeof d !== "object") d = {};
+
+    d.accounts = (Array.isArray(d.accounts) ? d.accounts : [])
+      .filter(function (a) { return a && a.id != null; })
+      .map(function (a) { return { id: String(a.id), name: a.name == null ? "" : String(a.name) }; });
+    var ids = {};
+    d.accounts.forEach(function (a) { ids[a.id] = true; });
+
+    var usedKeys = {};
+    d.sections = (Array.isArray(d.sections) ? d.sections : [])
+      .filter(function (s) { return s && s.id != null; })
+      .map(function (s) {
+        var out = {
+          id: String(s.id),
+          name: s.name == null ? "" : String(s.name),
+          color: isFinite(s.color) ? Math.max(0, Math.floor(s.color)) : 0,
+          pick: typeof s.pick === "string" ? s.pick : "",
+          chars: []
+        };
+        var isReq = REQUIRED.some(function (r) { return r.key === s.key; });
+        if (isReq && !usedKeys[s.key]) { out.key = s.key; usedKeys[s.key] = true; }
+        out.chars = (Array.isArray(s.chars) ? s.chars : [])
+          .filter(function (c) { return c && ids[c.accountId]; })
+          .map(function (c) {
+            return {
+              id: c.id != null ? String(c.id) : uid(),
+              name: c.name == null ? "" : String(c.name),
+              checked: !!c.checked,
+              leader: !!c.leader,
+              accountId: c.accountId,
+              num: toHalf(c.num == null ? "" : c.num).replace(/\D/g, "").slice(0, 2)
+            };
+          });
+        return out;
+      });
+
+    REQUIRED.forEach(function (r, i) {
+      var f = null;
+      d.sections.forEach(function (s) { if (s.key === r.key) f = s; });
+      if (!f) {
+        f = { id: uid(), key: r.key, name: r.name, color: r.color, pick: "", chars: [] };
+        d.sections.splice(Math.min(i, d.sections.length), 0, f);
+      }
+      f.name = r.name;
+    });
+
+    d.extra = (Array.isArray(d.extra) ? d.extra : [])
+      .filter(function (x) { return x && ids[x.accountId] && x.name; })
+      .map(function (x) {
+        return { id: x.id != null ? String(x.id) : uid(), name: String(x.name), accountId: x.accountId };
+      });
+
+    var notes = {};
+    if (d.notes && typeof d.notes === "object") {
+      Object.keys(d.notes).forEach(function (k) {
+        var n = d.notes[k];
+        if (!n || typeof n !== "object") return;
+        var month = String(n.month == null ? "" : n.month);
+        if (!/^(1[0-2]|[1-9])$/.test(month)) month = "";
+        var memo = String(n.memo == null ? "" : n.memo);
+        if (month || memo) notes[k] = { month: month, memo: memo };
+      });
+    }
+    d.notes = notes;
+    return d;
+  }
+
+  function defaultState() {
+    return normalize({ accounts: [], sections: [], extra: [], notes: {} });
   }
 
   function nextColorIndex() {
@@ -82,70 +180,123 @@
   }
 
   function findAccount(id) {
+    if (!id) return null;
     for (var i = 0; i < state.accounts.length; i++) {
       if (state.accounts[i].id === id) return state.accounts[i];
     }
     return null;
   }
 
+  function noteKey(accountId, name) { return accountId + "|" + name; }
+
+  function nameExists(accountId, name) {
+    var hit = state.sections.some(function (s) {
+      return s.chars.some(function (c) { return c.accountId === accountId && c.name === name; });
+    });
+    if (hit) return true;
+    return state.extra.some(function (x) { return x.accountId === accountId && x.name === name; });
+  }
+
+  // どこにも存在しないキャラの補足情報(月・メモ)を削除する
+  function pruneNotes() {
+    var valid = {};
+    state.sections.forEach(function (s) {
+      s.chars.forEach(function (c) { valid[noteKey(c.accountId, c.name)] = true; });
+    });
+    state.extra.forEach(function (x) { valid[noteKey(x.accountId, x.name)] = true; });
+    Object.keys(state.notes).forEach(function (k) {
+      if (!valid[k]) delete state.notes[k];
+    });
+  }
+
+  function setNote(key, field, val) {
+    var n = state.notes[key] || (state.notes[key] = { month: "", memo: "" });
+    n[field] = val;
+    if (!n.month && !n.memo) delete state.notes[key];
+    save();
+  }
+
+  // キャラ名の変更に補足情報を追従させる
+  function renameNote(accountId, oldName, newName) {
+    if (!newName || oldName === newName) return;
+    var ok = noteKey(accountId, oldName);
+    var nk = noteKey(accountId, newName);
+    var n = state.notes[ok];
+    if (!n) return;
+    if (!state.notes[nk]) state.notes[nk] = { month: n.month, memo: n.memo };
+    if (!nameExists(accountId, oldName)) delete state.notes[ok];
+  }
+
+  function sanitizePicks() {
+    var changed = false;
+    state.sections.forEach(function (s) {
+      if (s.pick && !s.chars.some(function (c) { return c.id === s.pick; })) {
+        s.pick = "";
+        changed = true;
+      }
+    });
+    if (changed) save();
+  }
+
+  /* ================= 操作 ================= */
   function addSection() {
+    var custom = state.sections.filter(function (s) { return !s.key; }).length;
     state.sections.push({
       id: uid(),
-      name: "週課 " + (state.sections.length + 1),
+      name: "週課 " + (custom + 1),
       color: nextColorIndex(),
+      pick: "",
       chars: []
     });
     save();
     render();
   }
 
-  // 全週課にアカウントのセクションを追加(アカウントは全週課共通)
+  // アカウントの登録のみ(週課側には追加しない)
   function addAccount() {
     var input = $("accountName");
     var name = input.value.trim();
     if (!name) { input.focus(); return; }
+    var dup = state.accounts.some(function (a) { return a.name === name; });
+    if (dup) { alert("同名のアカウントが既に存在します。"); return; }
     var a = { id: uid(), name: name };
     state.accounts.push(a);
-    bulkAccountId = a.id;   // 追加したアカウントを追加先に選択
+    bulkAccountId = a.id;   // 追加したアカウントをキャラ追加先に選択
     input.value = "";
     save();
-    render();
+    renderAccountSelects();
     input.focus();
   }
 
-  function deleteAccount(a) {
-    if (!confirm("アカウント「" + (a.name || "無題") + "」と、全週課内のこのアカウントのキャラクターをすべて削除しますか?")) return;
-    state.accounts = state.accounts.filter(function (x) { return x.id !== a.id; });
-    state.sections.forEach(function (s) {
-      s.chars = s.chars.filter(function (c) { return c.accountId !== a.id; });
-    });
-    if (bulkAccountId === a.id) bulkAccountId = null;
-    save();
-    render();
-  }
-
-  // 一括追加: チェック済みの週課すべての、選択中アカウントにキャラ名を追加
+  // 一括追加: チェック済みの週課すべてに、選択中アカウントのキャラを追加
   function bulkAdd() {
+    if (!findAccount(bulkAccountId)) { alert("アカウントを選択してください"); return; }
     var input = $("bulkName");
     var name = input.value.trim();
     if (!name) { input.focus(); return; }
-    if (!findAccount(bulkAccountId)) return;
+
+    var targets = state.sections.filter(function (s) { return selected[s.id] !== false; });
+    if (!targets.length) { alert("追加先の週課を選択してください。"); return; }
 
     var leader = $("bulkLeader").checked;
-    var added = false;
-    state.sections.forEach(function (s) {
-      if (selected[s.id] !== false) {
-        s.chars.push({
-          id: uid(),
-          name: name,
-          checked: false,
-          leader: leader,
-          accountId: bulkAccountId
-        });
-        added = true;
-      }
+    var added = 0;
+    targets.forEach(function (s) {
+      var dup = s.chars.some(function (c) { return c.accountId === bulkAccountId && c.name === name; });
+      if (dup) return;
+      s.chars.push({
+        id: uid(),
+        name: name,
+        checked: false,
+        leader: leader,
+        accountId: bulkAccountId,
+        num: ""
+      });
+      added++;
     });
-    if (!added) return;
+    if (!added) {
+      alert("選択した週課には、このアカウントの同名キャラが既に登録されています。");
+      return;
+    }
 
     input.value = "";
     save();
@@ -153,7 +304,24 @@
     input.focus();
   }
 
-  // チェックボックスのみ全解除
+  // 補足情報エリア限定でキャラを追加(週課には追加されない)
+  function suppAdd() {
+    if (!findAccount(suppAccountId)) { alert("アカウントを選択してください"); return; }
+    var input = $("suppName");
+    var name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    if (nameExists(suppAccountId, name)) {
+      alert("このアカウントには同名のキャラが既に存在します。");
+      return;
+    }
+    state.extra.push({ id: uid(), name: name, accountId: suppAccountId });
+    input.value = "";
+    save();
+    renderSupp();
+    input.focus();
+  }
+
+  // チェックボックスのみ全解除(ヒペリオン選択・数字・補足情報は保持)
   function clearAll() {
     state.sections.forEach(function (s) {
       s.chars.forEach(function (c) { c.checked = false; });
@@ -164,25 +332,74 @@
 
   // 全データを削除して初期状態へ
   function resetAll() {
-    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
     state = defaultState();
     selected = {};
-    bulkAccountId = null;
+    bulkAccountId = "";
+    suppAccountId = "";
     $("bulkName").value = "";
     $("accountName").value = "";
+    $("suppName").value = "";
     $("bulkLeader").checked = false;
+    wipeStorage();
     save();
     render();
   }
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = text;
-    return e;
+  /* ================= エクスポート / インポート ================= */
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+  function exportData() {
+    var now = new Date();
+    var payload = {
+      app: "RS_weekly",
+      version: 2,
+      exportedAt: now.toISOString(),
+      data: state
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "RS_weekly_backup_" + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) +
+      "-" + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
-  /* ---------- 進捗表示 ---------- */
+  function importFile(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var next;
+      try {
+        var obj = JSON.parse(String(reader.result));
+        var d = obj && obj.data ? obj.data : obj;
+        if (!d || !Array.isArray(d.sections) || !Array.isArray(d.accounts)) throw new Error("format");
+        next = normalize(d);
+      } catch (e) {
+        alert("読み込めないファイルです。このツールでエクスポートしたJSONファイルを選択してください。");
+        return;
+      }
+      openConfirm({
+        title: "データをインポートしますか?",
+        text: "現在のデータはすべて、読み込んだファイルの内容で上書きされます。この操作は元に戻せません。必要であれば先にエクスポートしてください。",
+        okLabel: "インポート",
+        onOk: function () {
+          state = next;
+          selected = {};
+          bulkAccountId = "";
+          suppAccountId = "";
+          save();
+          render();
+        }
+      });
+    };
+    reader.onerror = function () { alert("ファイルを読み込めませんでした。"); };
+    reader.readAsText(file);
+  }
+
+  /* ================= 進捗表示 ================= */
   function countText(chars) {
     var done = chars.filter(function (c) { return c.checked; }).length;
     return done + " / " + chars.length;
@@ -206,7 +423,7 @@
     }
   }
 
-  /* ---------- キャラ名の文字を枠幅に合わせて自動縮小 ---------- */
+  /* ================= キャラ名の文字を枠幅に合わせて自動縮小 ================= */
   var meter = document.createElement("span");
   meter.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;";
   document.body.appendChild(meter);
@@ -237,7 +454,7 @@
     for (var i = 0; i < list.length; i++) fit(list[i]);
   }
 
-  /* ---------- ドラッグ＆ドロップによる並べ替え ---------- */
+  /* ================= ドラッグ＆ドロップ(同じアカウント内での並べ替え) ================= */
   function clearDrop() {
     var list = document.querySelectorAll(".drop-before, .drop-after, .drop-end");
     for (var i = 0; i < list.length; i++) {
@@ -252,12 +469,11 @@
     return -1;
   }
 
-  // targetId があればその前後に、なければ指定アカウントの末尾に移動
+  // targetId があればその前後に、なければ同アカウントの末尾に移動
   function moveChar(s, charId, targetId, after, accountId) {
     var idx = indexOfChar(s, charId);
     if (idx < 0) return;
     var c = s.chars.splice(idx, 1)[0];
-    c.accountId = accountId;
     var pos = -1;
     if (targetId) {
       var t = indexOfChar(s, targetId);
@@ -276,13 +492,17 @@
     return e.clientX > r.left + r.width / 2;
   }
 
+  function canDrop(s, a) {
+    return drag && drag.sid === s.id && drag.aid === a.id;
+  }
+
   function bindCharDrag(row, handle, s, c, a) {
     // ハンドルを押したときだけカードをドラッグ可能にする(入力欄の文字選択を妨げないため)
     handle.addEventListener("mousedown", function () { row.draggable = true; });
     handle.addEventListener("mouseup", function () { row.draggable = false; });
 
     row.addEventListener("dragstart", function (e) {
-      drag = { sid: s.id, cid: c.id };
+      drag = { sid: s.id, cid: c.id, aid: a.id };
       e.dataTransfer.effectAllowed = "move";
       try { e.dataTransfer.setData("text/plain", c.id); } catch (err) {}
       try { e.dataTransfer.setDragImage(row, 20, 16); } catch (err) {}
@@ -297,17 +517,17 @@
     });
 
     row.addEventListener("dragover", function (e) {
-      if (!drag || drag.sid !== s.id) return;
+      if (!canDrop(s, a)) return;
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = "move";
-      if (drag.cid === c.id) { clearDrop(); return; }
       clearDrop();
+      if (drag.cid === c.id) return;
       row.classList.add(isAfter(e, row) ? "drop-after" : "drop-before");
     });
 
     row.addEventListener("drop", function (e) {
-      if (!drag || drag.sid !== s.id) return;
+      if (!canDrop(s, a)) return;
       e.preventDefault();
       e.stopPropagation();
       if (drag.cid !== c.id) {
@@ -322,14 +542,14 @@
 
   function bindGridDrop(grid, s, a) {
     grid.addEventListener("dragover", function (e) {
-      if (!drag || drag.sid !== s.id) return;
+      if (!canDrop(s, a)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
       clearDrop();
       grid.classList.add("drop-end");
     });
     grid.addEventListener("drop", function (e) {
-      if (!drag || drag.sid !== s.id) return;
+      if (!canDrop(s, a)) return;
       e.preventDefault();
       moveChar(s, drag.cid, null, false, a.id);
       save();
@@ -339,7 +559,7 @@
     });
   }
 
-  /* ---------- 一括追加バー ---------- */
+  /* ================= 追加バー(週課チェック・アカウント選択) ================= */
   function renderTargets() {
     var box = $("bulkTargets");
     box.innerHTML = "";
@@ -360,65 +580,259 @@
     });
   }
 
-  function renderAccountSelect() {
-    var sel = $("bulkAccount");
+  function fillAccountSelect(sel, currentId) {
     sel.innerHTML = "";
-    if (!findAccount(bulkAccountId)) {
-      bulkAccountId = state.accounts.length ? state.accounts[0].id : null;
-    }
+    var ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = state.accounts.length ? "アカウントを選択してください" : "アカウントを追加してください";
+    sel.appendChild(ph);
     state.accounts.forEach(function (a) {
       var o = document.createElement("option");
       o.value = a.id;
       o.textContent = a.name || "(無題)";
-      o.selected = a.id === bulkAccountId;
       sel.appendChild(o);
     });
+    sel.value = findAccount(currentId) ? currentId : "";
+    sel.classList.toggle("is-empty", !sel.value);
   }
 
-  /* ---------- 描画 ---------- */
-  function render() {
+  function renderAccountSelects() {
+    if (!findAccount(bulkAccountId)) bulkAccountId = "";
+    if (!findAccount(suppAccountId)) suppAccountId = "";
+    fillAccountSelect($("bulkAccount"), bulkAccountId);
+    fillAccountSelect($("suppAccount"), suppAccountId);
+  }
+
+  // アカウント名の変更を画面全体に反映(入力中の欄は再描画しない)
+  function syncAccountNames(a, activeInput) {
+    var label = a.name || "(無題)";
+    var i, list;
+    list = document.querySelectorAll(".account-name");
+    for (i = 0; i < list.length; i++) {
+      if (list[i] !== activeInput && list[i].dataset.account === a.id) list[i].value = a.name;
+    }
+    list = document.querySelectorAll("#bulkAccount option, #suppAccount option");
+    for (i = 0; i < list.length; i++) {
+      if (list[i].value === a.id) list[i].textContent = label;
+    }
+    list = document.querySelectorAll("optgroup");
+    for (i = 0; i < list.length; i++) {
+      if (list[i].dataset.account === a.id) list[i].label = label;
+    }
+    list = document.querySelectorAll(".supp-account-title");
+    for (i = 0; i < list.length; i++) {
+      if (list[i].dataset.account === a.id) list[i].textContent = label;
+    }
+  }
+
+  /* ================= ヒペリオンのキャラ選択プルダウン ================= */
+  function fillPick(sel, s) {
+    sel.innerHTML = "";
+    var none = document.createElement("option");
+    none.value = "";
+    none.textContent = "未選択";
+    sel.appendChild(none);
+    state.accounts.forEach(function (a) {
+      var list = s.chars.filter(function (c) { return c.accountId === a.id; });
+      if (!list.length) return;
+      var g = document.createElement("optgroup");
+      g.label = a.name || "(無題)";
+      g.dataset.account = a.id;
+      list.forEach(function (c) {
+        var o = document.createElement("option");
+        o.value = c.id;
+        o.textContent = c.name || "(無名)";
+        g.appendChild(o);
+      });
+      sel.appendChild(g);
+    });
+    sel.value = s.pick || "";
+  }
+
+  /* ================= 補足情報エリア ================= */
+  // アカウント内の全キャラ名(重複は1件にまとめる)
+  function suppItems(accountId) {
+    var seen = {};
+    var out = [];
+    state.sections.forEach(function (s) {
+      s.chars.forEach(function (c) {
+        if (c.accountId === accountId && c.name && !seen[c.name]) {
+          seen[c.name] = true;
+          out.push({ name: c.name, extraId: null });
+        }
+      });
+    });
+    state.extra.forEach(function (x) {
+      if (x.accountId === accountId && x.name && !seen[x.name]) {
+        seen[x.name] = true;
+        out.push({ name: x.name, extraId: x.id });
+      }
+    });
+    return out;
+  }
+
+  function renderSupp() {
+    var box = $("suppList");
+    box.innerHTML = "";
+    var any = false;
+
+    state.accounts.forEach(function (a) {
+      var items = suppItems(a.id);
+      if (!items.length) return;
+      any = true;
+
+      var blk = el("div", "supp-account");
+      var title = el("h3", "supp-account-title", a.name || "(無題)");
+      title.dataset.account = a.id;
+      blk.appendChild(title);
+
+      items.forEach(function (it) {
+        var key = noteKey(a.id, it.name);
+        var n = state.notes[key] || { month: "", memo: "" };
+        var row = el("div", "supp-row");
+
+        var nm = el("span", "supp-name", it.name);
+        nm.title = it.name;
+
+        var mo = el("select", "supp-month");
+        mo.title = "月";
+        var blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = "--";
+        mo.appendChild(blank);
+        for (var m = 1; m <= 12; m++) {
+          var o = document.createElement("option");
+          o.value = String(m);
+          o.textContent = m + "月";
+          mo.appendChild(o);
+        }
+        mo.value = n.month || "";
+        mo.addEventListener("change", function () { setNote(key, "month", mo.value); });
+
+        var memo = el("textarea", "supp-memo");
+        memo.rows = 1;
+        memo.setAttribute("wrap", "off");
+        memo.spellcheck = false;
+        memo.placeholder = "補足を入力";
+        memo.value = n.memo || "";
+        memo.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" && !e.isComposing) e.preventDefault();   // 1行入力
+        });
+        memo.addEventListener("input", function () {
+          if (/[\r\n]/.test(memo.value)) memo.value = memo.value.replace(/[\r\n]+/g, " ");
+          setNote(key, "memo", memo.value);
+        });
+
+        row.appendChild(nm);
+        row.appendChild(mo);
+        row.appendChild(memo);
+
+        // この欄だけで追加したキャラ(週課に存在しないキャラ)は削除できる
+        if (it.extraId) {
+          var del = el("button", "btn-del", "✕");
+          del.type = "button";
+          del.title = "このキャラクターを補足情報から削除";
+          del.addEventListener("click", function () {
+            if (!confirm("キャラクター「" + it.name + "」を補足情報から削除しますか?\n入力した月・補足も削除されます。")) return;
+            state.extra = state.extra.filter(function (x) { return x.id !== it.extraId; });
+            pruneNotes();
+            save();
+            renderSupp();
+          });
+          row.appendChild(del);
+        }
+        blk.appendChild(row);
+      });
+      box.appendChild(blk);
+    });
+
+    if (!any) {
+      box.appendChild(el("p", "empty-hint", "キャラクターがまだありません。「キャラ追加」で登録すると、ここにアカウントごとに一覧表示されます。"));
+    }
+  }
+
+  // キャラ名変更後など、派生表示(ヒペリオン選択・補足情報)を更新
+  function refreshDerived() {
+    state.sections.forEach(function (s) {
+      if (s.key !== "hyperion") return;
+      var sel = document.querySelector('[data-section="' + s.id + '"] .section-pick');
+      if (sel) fillPick(sel, s);
+    });
+    renderSupp();
+  }
+
+  /* ================= 週課セクションの描画 ================= */
+  function renderSections() {
     var root = $("sections");
     root.innerHTML = "";
 
     state.sections.forEach(function (s) {
+      var req = !!s.key;
       var box = el("section", "section");
       box.dataset.section = s.id;
       box.style.setProperty("--c", COLORS[s.color % COLORS.length]);
 
       // 週課ヘッダー
       var head = el("div", "section-head");
-      var name = el("input", "section-name");
+      var name = el("input", "section-name" + (req ? " fixed" : ""));
       name.type = "text";
       name.value = s.name;
       name.placeholder = "週課名";
-      name.addEventListener("input", function () {
-        s.name = name.value;
-        var t = document.querySelector('[data-target="' + s.id + '"] .target-text');
-        if (t) t.textContent = s.name || "(無題)";
-        save();
-      });
+      if (req) {
+        name.readOnly = true;      // 必須セクションは名称固定
+        name.tabIndex = -1;
+      } else {
+        name.addEventListener("input", function () {
+          s.name = name.value;
+          var t = document.querySelector('[data-target="' + s.id + '"] .target-text');
+          if (t) t.textContent = s.name || "(無題)";
+          save();
+        });
+      }
+      head.appendChild(name);
+
+      // ヒペリオン: 登録キャラの選択(翌週に装備を持つキャラ)
+      if (s.key === "hyperion") {
+        var pick = el("select", "section-pick");
+        pick.title = "翌週に装備を持つキャラ(クリアしても保持されます)";
+        fillPick(pick, s);
+        pick.addEventListener("change", function () {
+          s.pick = pick.value;
+          save();
+        });
+        head.appendChild(pick);
+      }
 
       var progress = el("span", "section-progress");
       progress.dataset.section = s.id;
-
-      var delSec = el("button", "btn-del", "✕");
-      delSec.type = "button";
-      delSec.title = "このセクションを削除";
-      delSec.addEventListener("click", function () {
-        if (!confirm("セクション「" + s.name + "」を削除しますか?")) return;
-        state.sections = state.sections.filter(function (x) { return x.id !== s.id; });
-        delete selected[s.id];
-        save();
-        render();
-      });
-
-      head.appendChild(name);
       head.appendChild(progress);
-      head.appendChild(delSec);
+
+      // 必須セクション以外のみ削除可能
+      if (!req) {
+        var delSec = el("button", "btn-del", "✕");
+        delSec.type = "button";
+        delSec.title = "このセクションを削除";
+        delSec.addEventListener("click", function () {
+          if (!confirm("セクション「" + s.name + "」を削除しますか?")) return;
+          state.sections = state.sections.filter(function (x) { return x.id !== s.id; });
+          delete selected[s.id];
+          pruneNotes();
+          save();
+          render();
+        });
+        head.appendChild(delSec);
+      }
       box.appendChild(head);
 
-      // アカウントごとのサブセクション
+      if (!s.chars.length) {
+        box.appendChild(el("p", "empty-hint", "上部の「キャラ追加」からキャラクターを追加できます"));
+      }
+
+      // アカウントごとのサブセクション(キャラが存在するアカウントのみ表示)
       state.accounts.forEach(function (a) {
+        var list = s.chars.filter(function (c) { return c.accountId === a.id; });
+        if (!list.length) return;
+
         var acc = el("div", "account");
         acc.dataset.account = a.id;
 
@@ -430,15 +844,7 @@
         an.dataset.account = a.id;
         an.addEventListener("input", function () {
           a.name = an.value;
-          // 他の週課の同じアカウント名欄と、追加先プルダウンも追従
-          var names = document.querySelectorAll(".account-name");
-          for (var i = 0; i < names.length; i++) {
-            if (names[i] !== an && names[i].dataset.account === a.id) names[i].value = a.name;
-          }
-          var opts = $("bulkAccount").options;
-          for (var j = 0; j < opts.length; j++) {
-            if (opts[j].value === a.id) opts[j].textContent = a.name || "(無題)";
-          }
+          syncAccountNames(a, an);
           save();
         });
 
@@ -446,24 +852,30 @@
         ap.dataset.section = s.id;
         ap.dataset.account = a.id;
 
+        // この週課を、このアカウントでは実行しない(アカウント自体は削除しない)
+        var delAcc = el("button", "btn-del", "✕");
+        delAcc.type = "button";
+        delAcc.title = "この週課からこのアカウントを外す";
+        delAcc.addEventListener("click", function () {
+          var msg = "週課「" + s.name + "」から、アカウント「" + (a.name || "無題") +
+            "」のキャラクターをすべて削除しますか?\n(アカウント自体や他の週課には影響しません)";
+          if (!confirm(msg)) return;
+          s.chars = s.chars.filter(function (c) { return c.accountId !== a.id; });
+          pruneNotes();
+          save();
+          render();
+        });
+
         ah.appendChild(an);
         ah.appendChild(ap);
-
-        // 最後の1アカウントは削除できない
-        if (state.accounts.length > 1) {
-          var delAcc = el("button", "btn-del", "✕");
-          delAcc.type = "button";
-          delAcc.title = "このアカウントを全週課から削除";
-          delAcc.addEventListener("click", function () { deleteAccount(a); });
-          ah.appendChild(delAcc);
-        }
+        ah.appendChild(delAcc);
         acc.appendChild(ah);
 
         // キャラクター(1行5列、増えた分だけ自動で高さが伸びる)
         var grid = el("div", "chars");
         bindGridDrop(grid, s, a);
 
-        s.chars.filter(function (c) { return c.accountId === a.id; }).forEach(function (c) {
+        list.forEach(function (c) {
           var row = el("div", "char" + (c.checked ? " done" : "") + (c.leader ? " leader" : ""));
 
           var handle = el("span", "drag-handle");
@@ -483,10 +895,21 @@
           nm.type = "text";
           nm.value = c.name;
           nm.placeholder = "キャラ名";
+          var oldName = c.name;
+          nm.addEventListener("focus", function () { oldName = c.name; });
           nm.addEventListener("input", function () {
             c.name = nm.value;
             fit(nm);
             save();
+          });
+          nm.addEventListener("change", function () {
+            c.name = nm.value.trim();
+            nm.value = c.name;
+            fit(nm);
+            renameNote(c.accountId, oldName, c.name);
+            oldName = c.name;
+            save();
+            refreshDerived();
           });
 
           var actions = el("div", "char-actions");
@@ -506,6 +929,7 @@
           del.title = "このキャラクターを削除";
           del.addEventListener("click", function () {
             s.chars = s.chars.filter(function (x) { return x.id !== c.id; });
+            pruneNotes();
             save();
             render();
           });
@@ -516,6 +940,31 @@
           row.appendChild(handle);
           row.appendChild(cb);
           row.appendChild(nm);
+
+          // タビアクート: キャラ名ごとに数字(2桁まで)
+          if (s.key === "tabiakuto") {
+            var num = el("input", "char-num");
+            num.type = "text";
+            num.setAttribute("inputmode", "numeric");
+            num.maxLength = 2;
+            num.autocomplete = "off";
+            num.placeholder = "00";
+            num.title = "数字(2桁まで)";
+            num.value = c.num || "";
+            var applyNum = function () {
+              var v = toHalf(num.value).replace(/\D/g, "").slice(0, 2);
+              if (v !== num.value) num.value = v;
+              c.num = v;
+              save();
+            };
+            num.addEventListener("input", function (e) {
+              if (e.isComposing) return;
+              applyNum();
+            });
+            num.addEventListener("compositionend", applyNum);
+            row.appendChild(num);
+          }
+
           row.appendChild(actions);
           bindCharDrag(row, handle, s, c, a);
           grid.appendChild(row);
@@ -527,54 +976,122 @@
 
       root.appendChild(box);
     });
+  }
 
+  function render() {
+    sanitizePicks();
+    renderSections();
     renderTargets();
-    renderAccountSelect();
+    renderAccountSelects();
+    renderSupp();
     refreshProgress();
     fitAll();   // DOMに追加された後でサイズを計算
   }
 
-  /* ---------- 初期化の確認ダイアログ ---------- */
+  /* ================= 確認ダイアログ ================= */
   var modal = $("modal");
 
-  function openModal() {
+  function openConfirm(o) {
+    $("modalTitle").textContent = o.title;
+    $("modalText").textContent = o.text;
+    $("modalOk").textContent = o.okLabel;
+    modalAction = o.onOk;
     modal.classList.add("open");
-    $("modalCancel").focus();
+    $("modalCancel").focus();   // 誤操作防止のためキャンセルに初期フォーカス
   }
+
   function closeModal() {
     modal.classList.remove("open");
+    modalAction = null;
   }
 
-  $("resetFab").addEventListener("click", openModal);
-  $("modalCancel").addEventListener("click", closeModal);
-  $("modalOk").addEventListener("click", function () {
-    closeModal();
-    resetAll();
-  });
-  modal.addEventListener("click", function (e) {
-    if (e.target === modal) closeModal();
-  });
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && modal.classList.contains("open")) closeModal();
-  });
+  /* ================= 起動 ================= */
+  function bindEvents() {
+    $("resetFab").addEventListener("click", function () {
+      openConfirm({
+        title: "全データを初期化しますか?",
+        text: "保存されているすべてのデータ(アカウント、キャラクター、補足情報、ヒペリオンの選択内容を含む)を削除し、「ヒペリオン」「タビアクート」だけの初期状態に戻します。この操作は元に戻せません。必要であれば先にエクスポートしてください。",
+        okLabel: "初期化",
+        onOk: resetAll
+      });
+    });
+    $("modalCancel").addEventListener("click", closeModal);
+    $("modalOk").addEventListener("click", function () {
+      var f = modalAction;
+      closeModal();
+      if (f) f();
+    });
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal) closeModal();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal.classList.contains("open")) closeModal();
+    });
 
-  $("addSection").addEventListener("click", addSection);
-  $("clearBtn").addEventListener("click", clearAll);
-  $("bulkAdd").addEventListener("click", bulkAdd);
-  $("accountAdd").addEventListener("click", addAccount);
-  $("bulkAccount").addEventListener("change", function () { bulkAccountId = $("bulkAccount").value; });
-  $("bulkName").addEventListener("keydown", function (e) {
-    if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); bulkAdd(); }
-  });
-  $("accountName").addEventListener("keydown", function (e) {
-    if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); addAccount(); }
-  });
+    $("addSection").addEventListener("click", addSection);
+    $("clearBtn").addEventListener("click", clearAll);
+    $("bulkAdd").addEventListener("click", bulkAdd);
+    $("accountAdd").addEventListener("click", addAccount);
+    $("suppAdd").addEventListener("click", suppAdd);
 
-  var resizeTimer = null;
-  window.addEventListener("resize", function () {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(fitAll, 60);
-  });
+    $("bulkAccount").addEventListener("change", function () {
+      bulkAccountId = $("bulkAccount").value;
+      $("bulkAccount").classList.toggle("is-empty", !bulkAccountId);
+    });
+    $("suppAccount").addEventListener("change", function () {
+      suppAccountId = $("suppAccount").value;
+      $("suppAccount").classList.toggle("is-empty", !suppAccountId);
+    });
 
-  render();
+    function enter(id, fn) {
+      $(id).addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); fn(); }
+      });
+    }
+    enter("bulkName", bulkAdd);
+    enter("accountName", addAccount);
+    enter("suppName", suppAdd);
+
+    $("exportBtn").addEventListener("click", exportData);
+    $("importBtn").addEventListener("click", function () { $("importFile").click(); });
+    $("importFile").addEventListener("change", function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (f) importFile(f);
+      e.target.value = "";   // 同じファイルを再選択できるようにする
+    });
+
+    var resizeTimer = null;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(fitAll, 60);
+    });
+  }
+
+  function start() {
+    openDB()
+      .then(function (d) {
+        db = d;
+        return idbRun("readonly", function (s) { return s.get(REC_KEY); });
+      })
+      .then(function (rec) {
+        state = rec ? normalize(rec) : defaultState();
+      })
+      .catch(function (e) {
+        // 読み込めない場合、既存データを上書きしないよう保存を無効にする
+        console.error(e);
+        db = null;
+        state = defaultState();
+        alert("IndexedDBを利用できないため、データの保存・復元ができません。ブラウザの設定を確認してください。");
+      })
+      .then(function () {
+        bindEvents();
+        render();
+        // ブラウザによる自動削除の対象外にするよう要求(許可はブラウザ次第)
+        if (navigator.storage && navigator.storage.persist) {
+          navigator.storage.persist().catch(function () {});
+        }
+      });
+  }
+
+  start();
 })();
