@@ -13,10 +13,21 @@
     <button id="clearBtn" type="button">クリア</button>
   </div>
   <div class="bulk-row">
-    <span class="bulk-title">キャラ一括追加</span>
-    <input id="bulkName" type="text" placeholder="キャラ名を入力" autocomplete="off">
-    <div id="bulkTargets"></div>
-    <button id="bulkAdd" type="button">追加</button>
+    <div class="bulk-line">
+      <span class="bulk-title">キャラ一括追加</span>
+      <input id="bulkName" type="text" placeholder="キャラ名を入力" autocomplete="off">
+      <select id="bulkAccount" title="追加先アカウント" aria-label="追加先アカウント"></select>
+      <label class="target leader-toggle" title="チェックすると引率キャラとして追加します">
+        <input id="bulkLeader" type="checkbox"><span>引率</span>
+      </label>
+      <div id="bulkTargets"></div>
+      <button id="bulkAdd" type="button">追加</button>
+    </div>
+    <div class="bulk-line">
+      <span class="bulk-title">アカウント追加</span>
+      <input id="accountName" type="text" placeholder="アカウント名を入力" autocomplete="off">
+      <button id="accountAdd" type="button">アカウント追加</button>
+    </div>
   </div>
 </header>
 
@@ -25,12 +36,12 @@
   <button id="addSection" type="button" title="セクションを追加">+</button>
 </main>
 
-<button id="resetFab" type="button" title="全データを初期化" aria-label="全データを初期化">↺</button>
+<button id="resetFab" type="button" title="全データを初期化" aria-label="全データを初期化">初期化</button>
 
 <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
   <div class="dialog">
     <h2 id="modalTitle">全データを初期化しますか?</h2>
-    <p>保存されているすべてのデータを削除し、「ヒペリオン」と「タビアクート」だけの初期状態に戻します。この操作は元に戻せません。</p>
+    <p>保存されているすべてのデータを削除し、「ヒペリオン」「タビアクート」の2つの週課と、アカウント「アカウント1」だけの初期状態に戻します。この操作は元に戻せません。</p>
     <div class="dialog-actions">
       <button id="modalCancel" type="button">キャンセル</button>
       <button id="modalOk" type="button">初期化</button>
