@@ -3,16 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>REDSTONE ウィークリーコンテンツ管理</title>
+<title>REDSTONE コンテンツ管理ツール</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header>
   <div class="top-row">
-    <h1><span class="game">REDSTONE</span> ウィークリーコンテンツ<span class="sub">週課管理ツール</span></h1>
+    <h1><span class="game">REDSTONE</span> コンテンツ管理ツール</h1>
     <button id="clearBtn" type="button">クリア</button>
   </div>
   <div class="bulk-row">
+    <div class="bulk-line">
+      <span class="bulk-title">アカウント追加</span>
+      <input id="accountName" type="text" placeholder="アカウント名を入力" autocomplete="off">
+      <button id="accountAdd" type="button">アカウント追加</button>
+    </div>
     <div class="bulk-line">
       <span class="bulk-title">キャラ一括追加</span>
       <input id="bulkName" type="text" placeholder="キャラ名を入力" autocomplete="off">
@@ -21,12 +26,12 @@
         <input id="bulkLeader" type="checkbox"><span>引率</span>
       </label>
       <div id="bulkTargets"></div>
-      <button id="bulkAdd" type="button">追加</button>
-    </div>
-    <div class="bulk-line">
-      <span class="bulk-title">アカウント追加</span>
-      <input id="accountName" type="text" placeholder="アカウント名を入力" autocomplete="off">
-      <button id="accountAdd" type="button">アカウント追加</button>
+      <button id="bulkAdd" type="button">キャラ追加</button>
+      <div class="io-buttons">
+        <button id="exportBtn" class="btn-io" type="button" title="データをJSONファイルに書き出します">エクスポート</button>
+        <button id="importBtn" class="btn-io" type="button" title="エクスポートしたJSONファイルを読み込みます">インポート</button>
+        <input id="importFile" type="file" accept=".json,application/json" hidden>
+      </div>
     </div>
   </div>
 </header>
@@ -34,17 +39,29 @@
 <main>
   <div id="sections"></div>
   <button id="addSection" type="button" title="セクションを追加">+</button>
+
+  <section class="supp" id="supp">
+    <div class="supp-head">
+      <h2>補足情報</h2>
+      <div class="supp-add">
+        <input id="suppName" type="text" placeholder="キャラ名を入力" autocomplete="off">
+        <select id="suppAccount" title="追加先アカウント" aria-label="追加先アカウント"></select>
+        <button id="suppAdd" type="button">キャラ追加</button>
+      </div>
+    </div>
+    <div id="suppList"></div>
+  </section>
 </main>
 
 <button id="resetFab" type="button" title="全データを初期化" aria-label="全データを初期化">初期化</button>
 
 <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
   <div class="dialog">
-    <h2 id="modalTitle">全データを初期化しますか?</h2>
-    <p>保存されているすべてのデータを削除し、「ヒペリオン」「タビアクート」の2つの週課と、アカウント「アカウント1」だけの初期状態に戻します。この操作は元に戻せません。</p>
+    <h2 id="modalTitle"></h2>
+    <p id="modalText"></p>
     <div class="dialog-actions">
       <button id="modalCancel" type="button">キャンセル</button>
-      <button id="modalOk" type="button">初期化</button>
+      <button id="modalOk" type="button">OK</button>
     </div>
   </div>
 </div>
