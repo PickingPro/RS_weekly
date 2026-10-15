@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>REDSTONE ウィークリーコンテンツ管理</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <div class="top-row">
+    <h1><span class="game">REDSTONE</span> ウィークリーコンテンツ<span class="sub">週課管理ツール</span></h1>
+    <button id="clearBtn" type="button">クリア</button>
+  </div>
+  <div class="bulk-row">
+    <span class="bulk-title">キャラ一括追加</span>
+    <input id="bulkName" type="text" placeholder="キャラ名を入力" autocomplete="off">
+    <div id="bulkTargets"></div>
+    <button id="bulkAdd" type="button">追加</button>
+  </div>
+</header>
+
+<main>
+  <div id="sections"></div>
+  <button id="addSection" type="button" title="セクションを追加">+</button>
+</main>
+
+<button id="resetFab" type="button" title="全データを初期化" aria-label="全データを初期化">↺</button>
+
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="dialog">
+    <h2 id="modalTitle">全データを初期化しますか?</h2>
+    <p>保存されているすべてのデータを削除し、「ヒペリオン」と「タビアクート」だけの初期状態に戻します。この操作は元に戻せません。</p>
+    <div class="dialog-actions">
+      <button id="modalCancel" type="button">キャンセル</button>
+      <button id="modalOk" type="button">初期化</button>
+    </div>
+  </div>
+</div>
+
+<script src="script/script.js"></script>
+</body>
+</html>
