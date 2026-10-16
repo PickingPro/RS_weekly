@@ -268,40 +268,71 @@
     input.focus();
   }
 
-  // 一括追加: チェック済みの週課すべてに、選択中アカウントのキャラを追加
+  // 入力文字列を、空白(半角・全角・タブ・改行)とカンマで区切ってキャラ名の配列にする
+  function splitNames(text) {
+    var seen = {};
+    var out = [];
+    String(text).split(/[\s,，、]+/).forEach(function (n) {
+      if (n && !seen[n]) { seen[n] = true; out.push(n); }
+    });
+    return out;
+  }
+
+  // 一括追加入力欄の高さを内容に合わせる(CSSのmax-heightまで)
+  function growBulk() {
+    var t = $("bulkName");
+    t.style.height = "auto";
+    t.style.height = t.scrollHeight + 2 + "px";
+  }
+
+  // 一括追加: チェック済みの週課すべてに、選択中アカウントのキャラを(複数まとめて)追加
   function bulkAdd() {
     if (!findAccount(bulkAccountId)) { alert("アカウントを選択してください"); return; }
     var input = $("bulkName");
-    var name = input.value.trim();
-    if (!name) { input.focus(); return; }
+    var names = splitNames(input.value);
+    if (!names.length) { input.focus(); return; }
 
     var targets = state.sections.filter(function (s) { return selected[s.id] !== false; });
     if (!targets.length) { alert("追加先の週課を選択してください。"); return; }
 
     var leader = $("bulkLeader").checked;
     var added = 0;
+    var skipped = {};
+    var skippedList = [];
+
     targets.forEach(function (s) {
-      var dup = s.chars.some(function (c) { return c.accountId === bulkAccountId && c.name === name; });
-      if (dup) return;
-      s.chars.push({
-        id: uid(),
-        name: name,
-        checked: false,
-        leader: leader,
-        accountId: bulkAccountId,
-        num: ""
+      names.forEach(function (name) {
+        var dup = s.chars.some(function (c) { return c.accountId === bulkAccountId && c.name === name; });
+        if (dup) {
+          if (!skipped[name]) { skipped[name] = true; skippedList.push(name); }
+          return;
+        }
+        s.chars.push({
+          id: uid(),
+          name: name,
+          checked: false,
+          leader: leader,
+          accountId: bulkAccountId,
+          num: ""
+        });
+        added++;
       });
-      added++;
     });
+
     if (!added) {
-      alert("選択した週課には、このアカウントの同名キャラが既に登録されています。");
+      alert("入力されたキャラは、選択した週課すべてに、このアカウントで既に登録されています。");
       return;
     }
 
     input.value = "";
+    growBulk();
     save();
     render();
     input.focus();
+
+    if (skippedList.length) {
+      alert("次のキャラは、登録済みの週課ではスキップしました。\n" + skippedList.join("、"));
+    }
   }
 
   // 補足情報エリア限定でキャラを追加(週課には追加されない)
@@ -337,6 +368,7 @@
     bulkAccountId = "";
     suppAccountId = "";
     $("bulkName").value = "";
+    growBulk();
     $("accountName").value = "";
     $("suppName").value = "";
     $("bulkLeader").checked = false;
@@ -1052,9 +1084,18 @@
         if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); fn(); }
       });
     }
-    enter("bulkName", bulkAdd);
     enter("accountName", addAccount);
     enter("suppName", suppAdd);
+
+    // キャラ一括追加: Enterで追加、Shift+Enterで改行。入力に応じて高さを自動調整
+    $("bulkName").addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        bulkAdd();
+      }
+    });
+    $("bulkName").addEventListener("input", growBulk);
+    growBulk();
 
     $("exportBtn").addEventListener("click", exportData);
     $("importBtn").addEventListener("click", function () { $("importFile").click(); });
@@ -1067,7 +1108,7 @@
     var resizeTimer = null;
     window.addEventListener("resize", function () {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(fitAll, 60);
+      resizeTimer = setTimeout(function () { fitAll(); growBulk(); }, 60);
     });
   }
 
