@@ -99,6 +99,17 @@ header h1 .game { color: var(--accent); font-weight: 800; }
   min-width: 140px;
   max-width: 320px;
 }
+/* キャラ一括追加の入力欄(複数行貼り付け対応・自動で高さが伸びる) */
+#bulkName {
+  display: block;
+  max-width: 360px;
+  font-family: inherit;
+  line-height: 1.4;
+  resize: none;
+  overflow-y: auto;
+  max-height: 9.5em;
+  scrollbar-width: thin;
+}
 #bulkAccount, #suppAccount {
   flex: none;
   max-width: 220px;
