@@ -304,7 +304,7 @@ main {
 }
 .account .btn-del { font-size: .9rem; }
 
-/* キャラクターは1行5人 */
+/* キャラクターは1行5人(タビアクートのみ1行4人) */
 .chars {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -312,7 +312,22 @@ main {
   min-height: 40px;
   border-radius: 8px;
 }
+.chars.cols4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 .chars.drop-end { outline: 2px dashed var(--c); outline-offset: 2px; }
+
+/* タビアクート: キャラカードと数字欄を横並びにするためのまとまり */
+.char-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.char-cell .char {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 
 .char {
   position: relative;
@@ -389,17 +404,17 @@ main {
 .char.done .char-name { text-decoration: line-through; }
 .char-name::placeholder { color: var(--muted); }
 
-/* タビアクートの数字入力(2桁まで) */
+/* タビアクートの数字入力(2桁まで。カードの外に配置) */
 .char-num {
   flex: none;
-  width: 2.5em;
-  padding: 3px 2px;
-  font-size: .85rem;
+  width: 2.8em;
+  padding: 7px 2px;
+  font-size: .95rem;
   text-align: center;
   color: var(--text);
-  background: rgba(0,0,0,.3);
+  background: var(--card);
   border: 1px solid rgba(255,255,255,.2);
-  border-radius: 5px;
+  border-radius: 6px;
   outline: none;
 }
 .char-num:focus { border-color: var(--c); }
@@ -633,9 +648,10 @@ main {
   .account { padding: 8px 8px 10px; }
   .chars { gap: 10px 6px; }
   .char { padding: 6px 4px 6px 6px; gap: 4px; }
+  .char-cell { gap: 4px; }
   .drag-handle { margin: -6px 0 -6px -6px; width: 8px; }
   .char-name { font-size: .75rem; }
-  .char-num { width: 2.2em; font-size: .75rem; }
+  .char-num { width: 2.4em; font-size: .8rem; padding: 6px 1px; }
   .char input[type=checkbox] { width: 16px; height: 16px; }
   .char input[type=checkbox]:checked::after { left: 3.5px; top: 0; width: 4px; height: 8px; }
   .supp-row { grid-template-columns: minmax(3em, 6em) 5em minmax(0, 1fr) auto; gap: 6px; }
