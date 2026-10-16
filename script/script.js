@@ -871,8 +871,9 @@
         ah.appendChild(delAcc);
         acc.appendChild(ah);
 
-        // キャラクター(1行5列、増えた分だけ自動で高さが伸びる)
-        var grid = el("div", "chars");
+        // キャラクター(1行5列。タビアクートのみ1行4列。増えた分だけ自動で高さが伸びる)
+        var isTabi = s.key === "tabiakuto";
+        var grid = el("div", "chars" + (isTabi ? " cols4" : ""));
         bindGridDrop(grid, s, a);
 
         list.forEach(function (c) {
@@ -940,9 +941,12 @@
           row.appendChild(handle);
           row.appendChild(cb);
           row.appendChild(nm);
+          row.appendChild(actions);
+          bindCharDrag(row, handle, s, c, a);
 
-          // タビアクート: キャラ名ごとに数字(2桁まで)
-          if (s.key === "tabiakuto") {
+          if (isTabi) {
+            // タビアクート: キャラ名ごとの数字(2桁まで)を、カードの外・右横に配置
+            var cell = el("div", "char-cell");
             var num = el("input", "char-num");
             num.type = "text";
             num.setAttribute("inputmode", "numeric");
@@ -962,12 +966,12 @@
               applyNum();
             });
             num.addEventListener("compositionend", applyNum);
-            row.appendChild(num);
+            cell.appendChild(row);
+            cell.appendChild(num);
+            grid.appendChild(cell);
+          } else {
+            grid.appendChild(row);
           }
-
-          row.appendChild(actions);
-          bindCharDrag(row, handle, s, c, a);
-          grid.appendChild(row);
         });
 
         acc.appendChild(grid);
