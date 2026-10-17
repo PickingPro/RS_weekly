@@ -232,27 +232,6 @@
     save();
   }
 
-  // キャラ名の変更に補足情報(月・メモ・並び順)を追従させる
-  function renameNote(accountId, oldName, newName) {
-    if (!newName || oldName === newName) return;
-
-    var ord = state.suppOrder[accountId];
-    if (ord && !nameExists(accountId, oldName)) {
-      var i = ord.indexOf(oldName);
-      if (i >= 0) {
-        if (ord.indexOf(newName) >= 0) ord.splice(i, 1);
-        else ord[i] = newName;
-      }
-    }
-
-    var ok = noteKey(accountId, oldName);
-    var nk = noteKey(accountId, newName);
-    var n = state.notes[ok];
-    if (!n) return;
-    if (!state.notes[nk]) state.notes[nk] = { month: n.month, memo: n.memo };
-    if (!nameExists(accountId, oldName)) delete state.notes[ok];
-  }
-
   function sanitizePicks() {
     var changed = false;
     state.sections.forEach(function (s) {
@@ -555,7 +534,7 @@
   }
 
   function bindCharDrag(row, handle, s, c, a) {
-    // ハンドルを押したときだけカードをドラッグ可能にする(入力欄の文字選択を妨げないため)
+    // ハンドルを押したときだけカードをドラッグ可能にする
     handle.addEventListener("mousedown", function () { row.draggable = true; });
     handle.addEventListener("mouseup", function () { row.draggable = false; });
 
@@ -922,9 +901,7 @@
     });
     input.addEventListener("blur", function () {
       input.value = cur;      // 無効な入力は確定済みの値に戻す
-      fitNone();
     });
-    function fitNone() {}     // (将来の拡張用の空フック)
 
     input.addEventListener("keydown", function (e) {
       if (e.isComposing) return;
@@ -1036,16 +1013,6 @@
     if (!any) {
       box.appendChild(el("p", "empty-hint", "キャラクターがまだありません。「キャラ追加」で登録すると、ここにアカウントごとに一覧表示されます。"));
     }
-  }
-
-  // キャラ名変更後など、派生表示(ヒペリオン選択・補足情報)を更新
-  function refreshDerived() {
-    state.sections.forEach(function (s) {
-      if (s.key !== "hyperion") return;
-      var sel = document.querySelector('[data-section="' + s.id + '"] .section-pick');
-      if (sel) fillPick(sel, s);
-    });
-    renderSupp();
   }
 
   /* ================= 週課セクションの描画 ================= */
@@ -1179,26 +1146,13 @@
             save();
           });
 
+          // キャラ名: 表示専用(編集不可)。クリックでチェックを切り替える
           var nm = el("input", "char-name");
           nm.type = "text";
           nm.value = c.name;
-          nm.placeholder = "キャラ名";
-          var oldName = c.name;
-          nm.addEventListener("focus", function () { oldName = c.name; });
-          nm.addEventListener("input", function () {
-            c.name = nm.value;
-            fit(nm);
-            save();
-          });
-          nm.addEventListener("change", function () {
-            c.name = nm.value.trim();
-            nm.value = c.name;
-            fit(nm);
-            renameNote(c.accountId, oldName, c.name);
-            oldName = c.name;
-            save();
-            refreshDerived();
-          });
+          nm.readOnly = true;
+          nm.tabIndex = -1;
+          nm.title = "クリック: チェック切替";
 
           var actions = el("div", "char-actions");
 
@@ -1229,6 +1183,15 @@
           row.appendChild(cb);
           row.appendChild(nm);
           row.appendChild(actions);
+
+          // カード内(名前・余白)のクリックでチェックを切り替える
+          row.addEventListener("click", function (e) {
+            var t = e.target;
+            if (t === cb) return;                                   // チェックボックス自身は標準動作
+            if (t.closest && (t.closest(".drag-handle") || t.closest(".char-actions"))) return;
+            cb.click();
+          });
+
           bindCharDrag(row, handle, s, c, a);
 
           if (isTabi) {
