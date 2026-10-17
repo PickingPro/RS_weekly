@@ -828,6 +828,143 @@
     });
   }
 
+  /* ---------- 月の入力コンボボックス(文字部分=数字入力 / ▾=一覧表示) ---------- */
+  function closeMonthLists(except) {
+    var list = document.querySelectorAll(".month-list.open");
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] !== except) list[i].classList.remove("open");
+    }
+  }
+
+  function buildMonthCombo(initial, onChange) {
+    var cur = initial || "";
+
+    var wrap = el("div", "month-combo");
+
+    var input = el("input", "month-input");
+    input.type = "text";
+    input.setAttribute("inputmode", "numeric");
+    input.maxLength = 2;
+    input.autocomplete = "off";
+    input.placeholder = "--";
+    input.title = "数字を入力(1〜12)";
+    input.value = cur;
+
+    var unit = el("span", "month-unit", "月");
+
+    var btn = el("button", "month-arrow", "▾");
+    btn.type = "button";
+    btn.tabIndex = -1;
+    btn.title = "月を一覧から選択";
+
+    var ul = el("ul", "month-list");
+    var lis = [];
+
+    function mark() {
+      lis.forEach(function (li) { li.classList.toggle("sel", li.dataset.v === cur); });
+    }
+
+    function commit(v) {
+      if (v === cur) return;
+      cur = v;
+      mark();
+      onChange(v);
+    }
+
+    function choose(v) {
+      input.value = v;
+      commit(v);
+      ul.classList.remove("open");
+    }
+
+    function addItem(v, label) {
+      var li = el("li", null, label);
+      li.dataset.v = v;
+      // mousedownで処理し、入力欄のblurより先に確定させる
+      li.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        choose(v);
+      });
+      ul.appendChild(li);
+      lis.push(li);
+    }
+    addItem("", "--");
+    for (var m = 1; m <= 12; m++) addItem(String(m), m + "月");
+    mark();
+
+    // 入力内容を整えて、1〜12なら即座に反映する
+    function apply() {
+      var v = toHalf(input.value).replace(/\D/g, "").slice(0, 2);
+      if (v.length === 2 && parseInt(v, 10) > 12) v = v.slice(1);   // 13→3 のように最後の1桁を残す
+      if (v !== input.value) input.value = v;
+      if (v === "") {
+        commit("");
+      } else {
+        var n = parseInt(v, 10);
+        if (n >= 1 && n <= 12) commit(String(n));
+        // 0 のみの場合は保持するだけ(確定せず、フォーカスが外れたら元に戻す)
+      }
+    }
+
+    input.addEventListener("input", function (e) {
+      if (e.isComposing) return;
+      apply();
+    });
+    input.addEventListener("compositionend", apply);
+    input.addEventListener("focus", function () {
+      closeMonthLists();
+      setTimeout(function () { input.select(); }, 0);   // 全選択して、そのまま上書き入力できるように
+    });
+    input.addEventListener("mouseup", function (e) {
+      if (document.activeElement === input && input.selectionStart === 0 && input.selectionEnd === input.value.length) {
+        e.preventDefault();   // クリック直後の選択解除を防ぐ
+      }
+    });
+    input.addEventListener("blur", function () {
+      input.value = cur;      // 無効な入力は確定済みの値に戻す
+      fitNone();
+    });
+    function fitNone() {}     // (将来の拡張用の空フック)
+
+    input.addEventListener("keydown", function (e) {
+      if (e.isComposing) return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        apply();
+        ul.classList.remove("open");
+        input.blur();
+      } else if (e.key === "Escape") {
+        ul.classList.remove("open");
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        var n = cur === "" ? 0 : parseInt(cur, 10);
+        n += e.key === "ArrowUp" ? -1 : 1;
+        if (n < 1) n = 12;
+        if (n > 12) n = 1;
+        input.value = String(n);
+        commit(String(n));
+        input.select();
+      }
+    });
+
+    btn.addEventListener("mousedown", function (e) { e.preventDefault(); });   // 入力欄のフォーカスを奪わない
+    btn.addEventListener("click", function () {
+      var willOpen = !ul.classList.contains("open");
+      closeMonthLists(ul);
+      ul.classList.toggle("open", willOpen);
+      if (willOpen) {
+        var sel = ul.querySelector("li.sel");
+        if (sel) ul.scrollTop = sel.offsetTop - 40;
+      }
+    });
+
+    wrap.appendChild(input);
+    wrap.appendChild(unit);
+    wrap.appendChild(btn);
+    wrap.appendChild(ul);
+    return wrap;
+  }
+
   function renderSupp() {
     var box = $("suppList");
     box.innerHTML = "";
@@ -855,20 +992,7 @@
         var nm = el("span", "supp-name", it.name);
         nm.title = it.name;
 
-        var mo = el("select", "supp-month");
-        mo.title = "月";
-        var blank = document.createElement("option");
-        blank.value = "";
-        blank.textContent = "--";
-        mo.appendChild(blank);
-        for (var m = 1; m <= 12; m++) {
-          var o = document.createElement("option");
-          o.value = String(m);
-          o.textContent = m + "月";
-          mo.appendChild(o);
-        }
-        mo.value = n.month || "";
-        mo.addEventListener("change", function () { setNote(key, "month", mo.value); });
+        var mo = buildMonthCombo(n.month || "", function (v) { setNote(key, "month", v); });
 
         var memo = el("textarea", "supp-memo");
         memo.rows = 1;
@@ -1192,7 +1316,15 @@
       if (e.target === modal) closeModal();
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && modal.classList.contains("open")) closeModal();
+      if (e.key === "Escape") {
+        if (modal.classList.contains("open")) closeModal();
+        closeMonthLists();
+      }
+    });
+
+    // 月の一覧の外側をクリックしたら閉じる
+    document.addEventListener("mousedown", function (e) {
+      if (!e.target.closest || !e.target.closest(".month-combo")) closeMonthLists();
     });
 
     $("addSection").addEventListener("click", addSection);
