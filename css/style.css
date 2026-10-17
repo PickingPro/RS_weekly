@@ -350,6 +350,7 @@ main {
   border: 1px solid rgba(255,255,255,.07);
   border-radius: 8px;
   padding: 8px;
+  cursor: pointer;   /* クリックでチェックを切り替え */
   transition: opacity .15s, background .15s;
 }
 .char.done { opacity: .5; background: color-mix(in srgb, var(--c) 12%, var(--card)); }
@@ -400,6 +401,7 @@ main {
   border-width: 0 2.5px 2.5px 0;
   transform: rotate(45deg);
 }
+/* キャラ名は表示専用(クリックでチェックを切り替え) */
 .char-name {
   flex: 1;
   width: 100%;
@@ -411,9 +413,10 @@ main {
   outline: none;
   padding: 2px 0;
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
 }
 .char.done .char-name { text-decoration: line-through; }
-.char-name::placeholder { color: var(--muted); }
 
 /* タビアクートの数字入力(2桁まで。カードの外に配置) */
 .char-num {
