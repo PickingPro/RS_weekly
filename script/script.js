@@ -24,7 +24,8 @@
   var selected = {};        // 一括追加の対象週課(未設定は選択済み扱い)
   var bulkAccountId = "";   // キャラ一括追加の追加先アカウント
   var suppAccountId = "";   // 補足情報エリアの追加先アカウント
-  var drag = null;          // ドラッグ中の情報 { sid, cid, aid }
+  var drag = null;          // 週課内ドラッグ中の情報 { sid, cid, aid }
+  var suppDrag = null;      // 補足情報内ドラッグ中の情報 { aid, name }
 
   function $(id) { return document.getElementById(id); }
 
@@ -157,11 +158,26 @@
       });
     }
     d.notes = notes;
+
+    // 補足情報欄の並び順(アカウントID → キャラ名の配列)
+    var so = {};
+    if (d.suppOrder && typeof d.suppOrder === "object") {
+      Object.keys(d.suppOrder).forEach(function (k) {
+        if (!ids[k] || !Array.isArray(d.suppOrder[k])) return;
+        var seen = {};
+        so[k] = d.suppOrder[k].filter(function (n) {
+          if (typeof n !== "string" || seen[n]) return false;
+          seen[n] = true;
+          return true;
+        });
+      });
+    }
+    d.suppOrder = so;
     return d;
   }
 
   function defaultState() {
-    return normalize({ accounts: [], sections: [], extra: [], notes: {} });
+    return normalize({ accounts: [], sections: [], extra: [], notes: {}, suppOrder: {} });
   }
 
   function nextColorIndex() {
@@ -216,9 +232,19 @@
     save();
   }
 
-  // キャラ名の変更に補足情報を追従させる
+  // キャラ名の変更に補足情報(月・メモ・並び順)を追従させる
   function renameNote(accountId, oldName, newName) {
     if (!newName || oldName === newName) return;
+
+    var ord = state.suppOrder[accountId];
+    if (ord && !nameExists(accountId, oldName)) {
+      var i = ord.indexOf(oldName);
+      if (i >= 0) {
+        if (ord.indexOf(newName) >= 0) ord.splice(i, 1);
+        else ord[i] = newName;
+      }
+    }
+
     var ok = noteKey(accountId, oldName);
     var nk = noteKey(accountId, newName);
     var n = state.notes[ok];
@@ -486,7 +512,7 @@
     for (var i = 0; i < list.length; i++) fit(list[i]);
   }
 
-  /* ================= ドラッグ＆ドロップ(同じアカウント内での並べ替え) ================= */
+  /* ================= ドラッグ＆ドロップ(週課内・同じアカウント内での並べ替え) ================= */
   function clearDrop() {
     var list = document.querySelectorAll(".drop-before, .drop-after, .drop-end");
     for (var i = 0; i < list.length; i++) {
@@ -682,25 +708,124 @@
   }
 
   /* ================= 補足情報エリア ================= */
-  // アカウント内の全キャラ名(重複は1件にまとめる)
+  // アカウント内の全キャラ名(重複は1件にまとめ、保存された並び順を反映する)
   function suppItems(accountId) {
     var seen = {};
-    var out = [];
+    var items = [];
     state.sections.forEach(function (s) {
       s.chars.forEach(function (c) {
         if (c.accountId === accountId && c.name && !seen[c.name]) {
           seen[c.name] = true;
-          out.push({ name: c.name, extraId: null });
+          items.push({ name: c.name, extraId: null });
         }
       });
     });
     state.extra.forEach(function (x) {
       if (x.accountId === accountId && x.name && !seen[x.name]) {
         seen[x.name] = true;
-        out.push({ name: x.name, extraId: x.id });
+        items.push({ name: x.name, extraId: x.id });
       }
     });
+
+    var order = state.suppOrder[accountId] || [];
+    var byName = {};
+    items.forEach(function (it) { byName[it.name] = it; });
+    var out = [];
+    var used = {};
+    order.forEach(function (n) {
+      if (byName[n] && !used[n]) { used[n] = true; out.push(byName[n]); }
+    });
+    items.forEach(function (it) {
+      if (!used[it.name]) out.push(it);
+    });
     return out;
+  }
+
+  // 補足情報の並べ替え: targetName の前後(なければ末尾)へ移動して順序を保存
+  function suppMove(accountId, name, targetName, after) {
+    var names = suppItems(accountId).map(function (it) { return it.name; });
+    var from = names.indexOf(name);
+    if (from < 0) return;
+    names.splice(from, 1);
+    var pos = names.length;
+    if (targetName != null) {
+      var t = names.indexOf(targetName);
+      if (t >= 0) pos = t + (after ? 1 : 0);
+    }
+    names.splice(pos, 0, name);
+    state.suppOrder[accountId] = names;
+    save();
+  }
+
+  function isAfterY(e, row) {
+    var r = row.getBoundingClientRect();
+    return e.clientY > r.top + r.height / 2;
+  }
+
+  function canSuppDrop(a) {
+    return suppDrag && suppDrag.aid === a.id;
+  }
+
+  function bindSuppDrag(row, handle, a, name) {
+    // ハンドルを押したときだけ行をドラッグ可能にする(入力欄の文字選択を妨げないため)
+    handle.addEventListener("mousedown", function () { row.draggable = true; });
+    handle.addEventListener("mouseup", function () { row.draggable = false; });
+
+    row.addEventListener("dragstart", function (e) {
+      suppDrag = { aid: a.id, name: name };
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", name); } catch (err) {}
+      try { e.dataTransfer.setDragImage(row, 20, 16); } catch (err) {}
+      setTimeout(function () { row.classList.add("dragging"); }, 0);
+    });
+
+    row.addEventListener("dragend", function () {
+      row.draggable = false;
+      row.classList.remove("dragging");
+      suppDrag = null;
+      clearDrop();
+    });
+
+    row.addEventListener("dragover", function (e) {
+      if (!canSuppDrop(a)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
+      clearDrop();
+      if (suppDrag.name === name) return;
+      row.classList.add(isAfterY(e, row) ? "drop-after" : "drop-before");
+    });
+
+    row.addEventListener("drop", function (e) {
+      if (!canSuppDrop(a)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (suppDrag.name !== name) {
+        suppMove(a.id, suppDrag.name, name, isAfterY(e, row));
+      }
+      suppDrag = null;
+      clearDrop();
+      renderSupp();
+    });
+  }
+
+  function bindSuppBlockDrop(blk, a) {
+    // 行の外(ブロックの空き部分)にドロップしたら、そのアカウントの末尾へ
+    blk.addEventListener("dragover", function (e) {
+      if (!canSuppDrop(a)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      clearDrop();
+      blk.classList.add("drop-end");
+    });
+    blk.addEventListener("drop", function (e) {
+      if (!canSuppDrop(a)) return;
+      e.preventDefault();
+      suppMove(a.id, suppDrag.name, null, false);
+      suppDrag = null;
+      clearDrop();
+      renderSupp();
+    });
   }
 
   function renderSupp() {
@@ -717,11 +842,15 @@
       var title = el("h3", "supp-account-title", a.name || "(無題)");
       title.dataset.account = a.id;
       blk.appendChild(title);
+      bindSuppBlockDrop(blk, a);
 
       items.forEach(function (it) {
         var key = noteKey(a.id, it.name);
         var n = state.notes[key] || { month: "", memo: "" };
         var row = el("div", "supp-row");
+
+        var handle = el("span", "supp-handle");
+        handle.title = "ドラッグして並べ替え";
 
         var nm = el("span", "supp-name", it.name);
         nm.title = it.name;
@@ -755,6 +884,7 @@
           setNote(key, "memo", memo.value);
         });
 
+        row.appendChild(handle);
         row.appendChild(nm);
         row.appendChild(mo);
         row.appendChild(memo);
@@ -773,6 +903,7 @@
           });
           row.appendChild(del);
         }
+        bindSuppDrag(row, handle, a, it.name);
         blk.appendChild(row);
       });
       box.appendChild(blk);
