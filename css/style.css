@@ -518,6 +518,7 @@ main {
   border-radius: 10px;
   min-width: 0;
 }
+.supp-account.drop-end { outline: 2px dashed var(--c); outline-offset: 2px; }
 .supp-account-title {
   margin: 0 0 6px;
   font-size: .95rem;
@@ -525,12 +526,27 @@ main {
 }
 .supp-row {
   display: grid;
-  grid-template-columns: minmax(4em, 9em) 5.4em minmax(0, 1fr) auto;
+  grid-template-columns: 10px minmax(4em, 9em) 5.4em minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding: 6px 0;
   border-top: 1px dashed rgba(255,255,255,.1);
 }
+.supp-row.dragging { opacity: .3; }
+.supp-row.drop-before { box-shadow: 0 -3px 0 0 #fff; }
+.supp-row.drop-after { box-shadow: 0 3px 0 0 #fff; }
+
+/* 補足情報のドラッグ用ハンドル(行左端の帯) */
+.supp-handle {
+  align-self: stretch;
+  width: 10px;
+  min-height: 24px;
+  border-radius: 5px;
+  background: radial-gradient(rgba(0,0,0,.5) 1px, transparent 1.6px) center / 5px 6px, var(--c);
+  cursor: grab;
+}
+.supp-handle:active { cursor: grabbing; }
+
 .supp-name {
   font-size: .88rem;
   overflow: hidden;
@@ -665,6 +681,7 @@ main {
   .char-num { width: 2.4em; font-size: .8rem; padding: 6px 1px; }
   .char input[type=checkbox] { width: 16px; height: 16px; }
   .char input[type=checkbox]:checked::after { left: 3.5px; top: 0; width: 4px; height: 8px; }
-  .supp-row { grid-template-columns: minmax(3em, 6em) 5em minmax(0, 1fr) auto; gap: 6px; }
+  .supp-row { grid-template-columns: 8px minmax(3em, 6em) 5em minmax(0, 1fr) auto; gap: 6px; }
+  .supp-handle { width: 8px; }
   #resetFab { right: 16px; bottom: 16px; padding: 12px 18px; font-size: .88rem; }
 }
