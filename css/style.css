@@ -526,7 +526,7 @@ main {
 }
 .supp-row {
   display: grid;
-  grid-template-columns: 10px minmax(4em, 9em) 5.4em minmax(0, 1fr) auto;
+  grid-template-columns: 10px minmax(4em, 9em) 6.6em minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding: 6px 0;
@@ -553,17 +553,80 @@ main {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.supp-month {
-  width: 100%;
-  padding: 5px 4px;
-  font-size: .82rem;
-  color: var(--text);
+
+/* 月の入力(文字部分は数字入力、右端の▾で一覧表示) */
+.month-combo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
   background: var(--card);
   border: 1px solid rgba(255,255,255,.15);
   border-radius: 6px;
+}
+.month-combo:focus-within { border-color: var(--c); }
+.month-input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 2px 5px 6px;
+  font-family: inherit;
+  font-size: .82rem;
+  text-align: right;
+  color: var(--text);
+  background: transparent;
+  border: none;
   outline: none;
+}
+.month-input::placeholder { color: var(--muted); }
+.month-unit {
+  flex: none;
+  padding-right: 4px;
+  font-size: .82rem;
+  color: var(--muted);
+  user-select: none;
+}
+.month-arrow {
+  flex: none;
+  align-self: stretch;
+  padding: 0 6px;
+  font-size: .75rem;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-left: 1px solid rgba(255,255,255,.15);
+  border-radius: 0 5px 5px 0;
   cursor: pointer;
 }
+.month-arrow:hover { color: #fff; background: rgba(255,255,255,.1); }
+.month-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 40;
+  min-width: 100%;
+  max-height: 220px;
+  margin: 0;
+  padding: 3px 0;
+  list-style: none;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgba(0,0,0,.5);
+  scrollbar-width: thin;
+}
+.month-list.open { display: block; }
+.month-list li {
+  padding: 4px 12px;
+  font-size: .82rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.month-list li:hover { background: rgba(255,255,255,.12); }
+.month-list li.sel { color: var(--c); font-weight: 700; }
+
 .supp-memo {
   display: block;
   width: 100%;
@@ -584,7 +647,7 @@ main {
   overflow-y: hidden;
   scrollbar-width: thin;
 }
-.supp-month:focus, .supp-memo:focus { border-color: var(--c); }
+.supp-memo:focus { border-color: var(--c); }
 .supp-memo::placeholder { color: var(--muted); }
 
 /* 初期化ボタン(フローティングアクションボタン) */
@@ -681,7 +744,7 @@ main {
   .char-num { width: 2.4em; font-size: .8rem; padding: 6px 1px; }
   .char input[type=checkbox] { width: 16px; height: 16px; }
   .char input[type=checkbox]:checked::after { left: 3.5px; top: 0; width: 4px; height: 8px; }
-  .supp-row { grid-template-columns: 8px minmax(3em, 6em) 5em minmax(0, 1fr) auto; gap: 6px; }
+  .supp-row { grid-template-columns: 8px minmax(3em, 6em) 6em minmax(0, 1fr) auto; gap: 6px; }
   .supp-handle { width: 8px; }
   #resetFab { right: 16px; bottom: 16px; padding: 12px 18px; font-size: .88rem; }
 }
