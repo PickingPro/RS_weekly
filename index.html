@@ -10,7 +10,10 @@
 <header>
   <div class="top-row">
     <h1><span class="game">REDSTONE</span> コンテンツ管理ツール</h1>
-    <button id="clearBtn" type="button">クリア</button>
+    <div class="top-actions">
+      <button id="helpBtn" type="button" title="使い方を表示します"><span class="help-mark">?</span>使い方</button>
+      <button id="clearBtn" type="button">クリア</button>
+    </div>
   </div>
   <div class="bulk-row">
     <div class="bulk-line">
@@ -62,6 +65,55 @@
     <div class="dialog-actions">
       <button id="modalCancel" type="button">キャンセル</button>
       <button id="modalOk" type="button">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="dialog help-dialog">
+    <h2 id="helpTitle">使い方</h2>
+    <div class="help-body">
+      <h3>1. アカウントを登録</h3>
+      <ul>
+        <li>最上部の「アカウント追加」欄に名前を入力して登録します。登録だけでは週課に何も作られません。</li>
+      </ul>
+      <h3>2. キャラを追加</h3>
+      <ul>
+        <li>キャラ名を入力し、追加先アカウントを選んで「キャラ追加」を押します。</li>
+        <li>スペース・改行・カンマ区切りで、複数キャラをまとめて追加できます。</li>
+        <li>右側のチェックが入っている週課すべてに追加されます。</li>
+        <li>「引率」にチェックして追加すると、金色の引率キャラになります。</li>
+      </ul>
+      <h3>3. クリア状況の記録</h3>
+      <ul>
+        <li>キャラカードをクリックするとチェックが切り替わります。</li>
+        <li>右上の「クリア」はチェックだけを外します。ヒペリオンの選択、タビアクートの数字、補足情報は残ります。</li>
+      </ul>
+      <h3>4. キャラカードの操作</h3>
+      <ul>
+        <li>左端の帯をドラッグすると、同じアカウント内で並べ替えられます。</li>
+        <li>カードにマウスを載せると「引」(引率の切り替え)と「✕」(削除)が出ます。</li>
+        <li>キャラ名は編集できません。間違えたときは削除して追加し直してください。</li>
+      </ul>
+      <h3>5. 週課セクション</h3>
+      <ul>
+        <li>ヒペリオンとタビアクートは固定です。「+」で週課を追加でき、追加分は名前変更と削除ができます。</li>
+        <li>アカウント見出しの「✕」で、その週課からそのアカウントのキャラをまとめて外せます。</li>
+      </ul>
+      <h3>6. 補足情報</h3>
+      <ul>
+        <li>全キャラがアカウントごとに一覧表示され、月(1〜12)と補足メモを記録できます。</li>
+        <li>週課に参加しないキャラは、この欄の「キャラ追加」で登録できます。</li>
+      </ul>
+      <h3>7. 保存とバックアップ</h3>
+      <ul>
+        <li>入力内容は自動でブラウザ内に保存されます。</li>
+        <li>「エクスポート」「インポート」で、バックアップや別のブラウザへの移行ができます。定期的な保存をおすすめします。</li>
+        <li>右下の「初期化」は、全データを削除します。元に戻せません。</li>
+      </ul>
+    </div>
+    <div class="dialog-actions">
+      <button id="helpClose" type="button">閉じる</button>
     </div>
   </div>
 </div>
