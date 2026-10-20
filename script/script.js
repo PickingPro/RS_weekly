@@ -1242,8 +1242,9 @@
     fitAll();   // DOMに追加された後でサイズを計算
   }
 
-  /* ================= 確認ダイアログ ================= */
+  /* ================= 確認ダイアログ・ヘルプダイアログ ================= */
   var modal = $("modal");
+  var helpModal = $("helpModal");
 
   function openConfirm(o) {
     $("modalTitle").textContent = o.title;
@@ -1257,6 +1258,15 @@
   function closeModal() {
     modal.classList.remove("open");
     modalAction = null;
+  }
+
+  function openHelp() {
+    helpModal.classList.add("open");
+    $("helpClose").focus();
+  }
+
+  function closeHelp() {
+    helpModal.classList.remove("open");
   }
 
   /* ================= 起動 ================= */
@@ -1278,8 +1288,17 @@
     modal.addEventListener("click", function (e) {
       if (e.target === modal) closeModal();
     });
+
+    // ヘルプ
+    $("helpBtn").addEventListener("click", openHelp);
+    $("helpClose").addEventListener("click", closeHelp);
+    helpModal.addEventListener("click", function (e) {
+      if (e.target === helpModal) closeHelp();
+    });
+
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
+        if (helpModal.classList.contains("open")) closeHelp();
         if (modal.classList.contains("open")) closeModal();
         closeMonthLists();
       }
