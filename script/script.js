@@ -1064,19 +1064,6 @@
       progress.dataset.section = s.id;
       head.appendChild(progress);
 
-      var pick2 = el("select", "section-pick-2"); // クラス名は必要に応じて変更してください
-      pick2.title = "テイマ保持：";
-      fillPick(pick2, s); // 1つ目と同じ選択肢リスト（s）をセット
-  
-      // 💡 2つ目の選択値を保存する変数（例: s.pick2）が必要です
-      pick2.value = s.pick2 || ""; 
-  
-      pick2.addEventListener("change", function () {
-        s.pick2 = pick2.value; // 2つ目の値を保存
-        save();
-      });
-      head.appendChild(pick2); // 2つ目を追加（自動的に1つ目の右側に並びます）
-
       // 必須セクション以外のみ削除可能
       if (!req) {
         var delSec = el("button", "btn-del", "✕");
