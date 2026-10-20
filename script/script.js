@@ -1054,6 +1054,9 @@
           s.pick = pick.value;
           save();
         });
+        var labelSpan = document.createElement("span");
+        labelSpan.textContent = "とどめ装備保持キャラ："; // ここに好きな文字を入れてください
+        head.appendChild(labelSpan);
         head.appendChild(pick);
       }
 
