@@ -4,6 +4,7 @@
   var DB_NAME = "RS_weekly_db";
   var STORE = "kv";
   var REC_KEY = "state";
+  var UNDO_MS = 5000;   // クリアを元に戻せる時間
 
   // セクションごとに枠線の色を分けるためのパレット
   var COLORS = ["#e0463c", "#3fa9f5", "#4ccf8a", "#f5b73f", "#b074f5", "#f56fa8", "#3fd6d0", "#f58a3f"];
@@ -19,6 +20,8 @@
   var saveChain = Promise.resolve();
   var saveWarned = false;
   var modalAction = null;
+  var toastTimer = null;
+  var toastUndoFn = null;
 
   // 以下は保存しない(画面を開いている間だけ保持する)選択状態
   var selected = {};        // 一括追加の対象週課(未設定は選択済み扱い)
@@ -45,6 +48,8 @@
       return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
     });
   }
+
+  function noteKey(accountId, name) { return accountId + "|" + name; }
 
   /* ================= IndexedDB ================= */
   function openDB() {
@@ -110,7 +115,8 @@
           id: String(s.id),
           name: s.name == null ? "" : String(s.name),
           color: isFinite(s.color) ? Math.max(0, Math.floor(s.color)) : 0,
-          pick: typeof s.pick === "string" ? s.pick : "",
+          pick: typeof s.pick === "string" ? s.pick : "",            // ヒペリオン「とどめ」
+          pickTame: typeof s.pickTame === "string" ? s.pickTame : "", // ヒペリオン「テイマ」
           chars: []
         };
         var isReq = REQUIRED.some(function (r) { return r.key === s.key; });
@@ -134,7 +140,7 @@
       var f = null;
       d.sections.forEach(function (s) { if (s.key === r.key) f = s; });
       if (!f) {
-        f = { id: uid(), key: r.key, name: r.name, color: r.color, pick: "", chars: [] };
+        f = { id: uid(), key: r.key, name: r.name, color: r.color, pick: "", pickTame: "", chars: [] };
         d.sections.splice(Math.min(i, d.sections.length), 0, f);
       }
       f.name = r.name;
@@ -173,11 +179,44 @@
       });
     }
     d.suppOrder = so;
+
+    // 補足情報欄に表示する週課キャラ(アカウントID → キャラ名の配列)
+    var secValid = {};
+    d.sections.forEach(function (s) {
+      s.chars.forEach(function (c) { secValid[noteKey(c.accountId, c.name)] = true; });
+    });
+    var sc = {};
+    if (d.suppShown && typeof d.suppShown === "object" && !Array.isArray(d.suppShown)) {
+      Object.keys(d.suppShown).forEach(function (k) {
+        if (!ids[k] || !Array.isArray(d.suppShown[k])) return;
+        var seen = {};
+        var list = d.suppShown[k].filter(function (n) {
+          if (typeof n !== "string" || !n || seen[n] || !secValid[noteKey(k, n)]) return false;
+          seen[n] = true;
+          return true;
+        });
+        if (list.length) sc[k] = list;
+      });
+    } else {
+      // 旧形式のデータ: 「非表示」にしていたキャラ以外は、これまでどおり表示扱いで引き継ぐ
+      var oldHidden = (d.suppHidden && typeof d.suppHidden === "object") ? d.suppHidden : {};
+      d.sections.forEach(function (s) {
+        s.chars.forEach(function (c) {
+          if (!c.name) return;
+          var hidden = Array.isArray(oldHidden[c.accountId]) && oldHidden[c.accountId].indexOf(c.name) >= 0;
+          if (hidden) return;
+          var list = sc[c.accountId] || (sc[c.accountId] = []);
+          if (list.indexOf(c.name) < 0) list.push(c.name);
+        });
+      });
+    }
+    d.suppShown = sc;
+    delete d.suppHidden;
     return d;
   }
 
   function defaultState() {
-    return normalize({ accounts: [], sections: [], extra: [], notes: {}, suppOrder: {} });
+    return normalize({ accounts: [], sections: [], extra: [], notes: {}, suppOrder: {}, suppShown: {} });
   }
 
   function nextColorIndex() {
@@ -203,25 +242,43 @@
     return null;
   }
 
-  function noteKey(accountId, name) { return accountId + "|" + name; }
-
-  function nameExists(accountId, name) {
-    var hit = state.sections.some(function (s) {
+  function sectionHasName(accountId, name) {
+    return state.sections.some(function (s) {
       return s.chars.some(function (c) { return c.accountId === accountId && c.name === name; });
     });
-    if (hit) return true;
+  }
+
+  function extraHasName(accountId, name) {
     return state.extra.some(function (x) { return x.accountId === accountId && x.name === name; });
   }
 
-  // どこにも存在しないキャラの補足情報(月・メモ)を削除する
+  function nameExists(accountId, name) {
+    return sectionHasName(accountId, name) || extraHasName(accountId, name);
+  }
+
+  function isSuppShown(accountId, name) {
+    var list = state.suppShown[accountId];
+    return !!list && list.indexOf(name) >= 0;
+  }
+
+  // どこにも存在しないキャラの補足情報(月・メモ)と表示の記録を削除する
   function pruneNotes() {
+    var secValid = {};
     var valid = {};
     state.sections.forEach(function (s) {
-      s.chars.forEach(function (c) { valid[noteKey(c.accountId, c.name)] = true; });
+      s.chars.forEach(function (c) {
+        secValid[noteKey(c.accountId, c.name)] = true;
+        valid[noteKey(c.accountId, c.name)] = true;
+      });
     });
     state.extra.forEach(function (x) { valid[noteKey(x.accountId, x.name)] = true; });
     Object.keys(state.notes).forEach(function (k) {
       if (!valid[k]) delete state.notes[k];
+    });
+    Object.keys(state.suppShown).forEach(function (aid) {
+      var list = state.suppShown[aid].filter(function (n) { return secValid[noteKey(aid, n)]; });
+      if (list.length) state.suppShown[aid] = list;
+      else delete state.suppShown[aid];
     });
   }
 
@@ -232,15 +289,35 @@
     save();
   }
 
+  // 選択中のキャラが存在しなくなっていたら、その側を未選択に戻す
   function sanitizePicks() {
     var changed = false;
     state.sections.forEach(function (s) {
-      if (s.pick && !s.chars.some(function (c) { return c.id === s.pick; })) {
-        s.pick = "";
-        changed = true;
-      }
+      ["pick", "pickTame"].forEach(function (f) {
+        if (s[f] && !s.chars.some(function (c) { return c.id === s[f]; })) {
+          s[f] = "";
+          changed = true;
+        }
+      });
     });
     if (changed) save();
+  }
+
+  /* ================= 追加メニュー(折りたたみ) ================= */
+  function setAddPanel(open) {
+    $("addPanel").classList.toggle("collapsed", !open);
+    $("addMenuBtn").setAttribute("aria-expanded", open ? "true" : "false");
+    $("addMenuBtn").querySelector(".am-arrow").textContent = open ? "▾" : "▸";
+    if (open) growBulk();
+  }
+
+  function toggleAddPanel() {
+    var open = $("addPanel").classList.contains("collapsed");
+    setAddPanel(open);
+    if (open) {
+      var target = state.accounts.length ? $("bulkName") : $("accountName");
+      target.focus();
+    }
   }
 
   /* ================= 操作 ================= */
@@ -251,6 +328,7 @@
       name: "週課 " + (custom + 1),
       color: nextColorIndex(),
       pick: "",
+      pickTame: "",
       chars: []
     });
     save();
@@ -283,9 +361,10 @@
     return out;
   }
 
-  // 一括追加入力欄の高さを内容に合わせる(CSSのmax-heightまで)
+  // 一括追加入力欄の高さを内容に合わせる(CSSのmax-heightまで)。折りたたみ中は何もしない
   function growBulk() {
     var t = $("bulkName");
+    if (!t.offsetParent) return;
     t.style.height = "auto";
     t.style.height = t.scrollHeight + 2 + "px";
   }
@@ -340,13 +419,19 @@
     }
   }
 
-  // 補足情報エリア限定でキャラを追加(週課には追加されない)
+  // 補足情報エリア限定でキャラを追加(週課には追加されない)。未表示の週課キャラと同名なら表示に追加する
   function suppAdd() {
     if (!findAccount(suppAccountId)) { alert("アカウントを選択してください"); return; }
     var input = $("suppName");
     var name = input.value.trim();
     if (!name) { input.focus(); return; }
     if (nameExists(suppAccountId, name)) {
+      if (sectionHasName(suppAccountId, name) && !extraHasName(suppAccountId, name) && !isSuppShown(suppAccountId, name)) {
+        showSupp(suppAccountId, name);
+        input.value = "";
+        input.focus();
+        return;
+      }
       alert("このアカウントには同名のキャラが既に存在します。");
       return;
     }
@@ -357,10 +442,65 @@
     input.focus();
   }
 
+  // 週課のキャラを補足情報欄に表示する
+  function showSupp(accountId, name) {
+    var list = state.suppShown[accountId] || (state.suppShown[accountId] = []);
+    if (list.indexOf(name) < 0) list.push(name);
+    save();
+    renderSupp();
+  }
+
+  // 補足情報欄から外す(週課側のデータ・月・メモは残す)
+  function hideSupp(accountId, name) {
+    var list = state.suppShown[accountId];
+    if (!list) return;
+    list = list.filter(function (n) { return n !== name; });
+    if (list.length) state.suppShown[accountId] = list;
+    else delete state.suppShown[accountId];
+    save();
+    renderSupp();
+  }
+
+  /* ---------- クリア(確認 → 実行 → 5秒間だけ元に戻せる) ---------- */
+  function checkedIds() {
+    var out = [];
+    state.sections.forEach(function (s) {
+      s.chars.forEach(function (c) { if (c.checked) out.push(c.id); });
+    });
+    return out;
+  }
+
+  function requestClear() {
+    if (!checkedIds().length) {
+      showToast("チェック済みのキャラはありません", null, 2500);
+      return;
+    }
+    openConfirm({
+      title: "チェックをすべて外しますか?",
+      text: "全キャラのチェックを外します。ヒペリオンの選択、タビアクートの数字、補足情報は消えません。\n実行後、5秒間だけ「元に戻す」で取り消せます。",
+      okLabel: "クリア",
+      onOk: doClear
+    });
+  }
+
   // チェックボックスのみ全解除(ヒペリオン選択・数字・補足情報は保持)
-  function clearAll() {
+  function doClear() {
+    var ids = checkedIds();
+    if (!ids.length) return;
     state.sections.forEach(function (s) {
       s.chars.forEach(function (c) { c.checked = false; });
+    });
+    save();
+    render();
+    showToast(ids.length + "件のチェックを外しました", function () { undoClear(ids); }, UNDO_MS);
+  }
+
+  // 外したチェックだけを復元する(その間に行った他の変更は戻さない)
+  function undoClear(ids) {
+    var set = {};
+    ids.forEach(function (id) { set[id] = true; });
+    state.sections.forEach(function (s) {
+      s.chars.forEach(function (c) { if (set[c.id]) c.checked = true; });
     });
     save();
     render();
@@ -368,6 +508,7 @@
 
   // 全データを削除して初期状態へ
   function resetAll() {
+    hideToast();
     state = defaultState();
     selected = {};
     bulkAccountId = "";
@@ -382,6 +523,29 @@
     render();
   }
 
+  /* ================= トースト ================= */
+  function hideToast() {
+    clearTimeout(toastTimer);
+    toastTimer = null;
+    toastUndoFn = null;
+    $("toast").classList.remove("show", "run");
+  }
+
+  function showToast(msg, undoFn, ms) {
+    hideToast();
+    var t = $("toast");
+    $("toastMsg").textContent = msg;
+    toastUndoFn = undoFn || null;
+    $("toastUndo").style.display = undoFn ? "" : "none";
+    t.classList.add("show");
+    if (undoFn) {
+      t.querySelector(".toast-bar").style.animationDuration = ms + "ms";
+      void t.offsetWidth;   // アニメーションを最初から再生するため
+      t.classList.add("run");
+    }
+    toastTimer = setTimeout(hideToast, ms);
+  }
+
   /* ================= エクスポート / インポート ================= */
   function pad(n) { return (n < 10 ? "0" : "") + n; }
 
@@ -389,7 +553,7 @@
     var now = new Date();
     var payload = {
       app: "RS_weekly",
-      version: 2,
+      version: 3,
       exportedAt: now.toISOString(),
       data: state
     };
@@ -423,6 +587,7 @@
         text: "現在のデータはすべて、読み込んだファイルの内容で上書きされます。この操作は元に戻せません。必要であれば先にエクスポートしてください。",
         okLabel: "インポート",
         onOk: function () {
+          hideToast();
           state = next;
           selected = {};
           bulkAccountId = "";
@@ -436,19 +601,26 @@
     reader.readAsText(file);
   }
 
-  /* ================= 進捗表示 ================= */
+  /* ================= 進捗表示・完了表示 ================= */
   function countText(chars) {
     var done = chars.filter(function (c) { return c.checked; }).length;
     return done + " / " + chars.length;
   }
 
+  function allChecked(chars) {
+    return chars.length > 0 && chars.every(function (c) { return c.checked; });
+  }
+
   function refreshProgress() {
     var list = document.querySelectorAll(".section-progress");
-    var i, n, s;
+    var i, n, s, box;
     for (i = 0; i < list.length; i++) {
       n = list[i];
       s = find(n.dataset.section);
-      if (s) n.textContent = countText(s.chars);
+      if (!s) continue;
+      n.textContent = countText(s.chars);
+      box = n.closest(".section");
+      if (box) box.classList.toggle("complete", allChecked(s.chars));
     }
     list = document.querySelectorAll(".account-progress");
     for (i = 0; i < list.length; i++) {
@@ -456,7 +628,10 @@
       s = find(n.dataset.section);
       if (!s) continue;
       var acc = n.dataset.account;
-      n.textContent = countText(s.chars.filter(function (c) { return c.accountId === acc; }));
+      var chars = s.chars.filter(function (c) { return c.accountId === acc; });
+      n.textContent = countText(chars);
+      box = n.closest(".account");
+      if (box) box.classList.toggle("complete", allChecked(chars));
     }
   }
 
@@ -660,10 +835,16 @@
     for (i = 0; i < list.length; i++) {
       if (list[i].dataset.account === a.id) list[i].textContent = label;
     }
+    list = document.querySelectorAll(".pool-chip");
+    for (i = 0; i < list.length; i++) {
+      if (list[i].dataset.account === a.id) {
+        list[i].textContent = label + " / " + list[i].dataset.name + "  ＋";
+      }
+    }
   }
 
-  /* ================= ヒペリオンのキャラ選択プルダウン ================= */
-  function fillPick(sel, s) {
+  /* ================= ヒペリオンのキャラ選択プルダウン(テイマ・とどめ) ================= */
+  function fillPick(sel, s, field) {
     sel.innerHTML = "";
     var none = document.createElement("option");
     none.value = "";
@@ -683,20 +864,26 @@
       });
       sel.appendChild(g);
     });
-    sel.value = s.pick || "";
+    sel.value = s[field] || "";
   }
 
   /* ================= 補足情報エリア ================= */
-  // アカウント内の全キャラ名(重複は1件にまとめ、保存された並び順を反映する)
+  // アカウント内の表示対象キャラ(重複は1件にまとめ、保存された並び順を反映する)
+  // 週課のキャラは「表示に追加」したものだけ。この欄だけで追加したキャラは常に表示。
   function suppItems(accountId) {
+    var extraByName = {};
+    state.extra.forEach(function (x) {
+      if (x.accountId === accountId && x.name) extraByName[x.name] = x.id;
+    });
+
     var seen = {};
     var items = [];
     state.sections.forEach(function (s) {
       s.chars.forEach(function (c) {
-        if (c.accountId === accountId && c.name && !seen[c.name]) {
-          seen[c.name] = true;
-          items.push({ name: c.name, extraId: null });
-        }
+        if (c.accountId !== accountId || !c.name || seen[c.name]) return;
+        seen[c.name] = true;
+        if (extraByName[c.name]) items.push({ name: c.name, extraId: extraByName[c.name] });
+        else if (isSuppShown(accountId, c.name)) items.push({ name: c.name, extraId: null });
       });
     });
     state.extra.forEach(function (x) {
@@ -716,6 +903,22 @@
     });
     items.forEach(function (it) {
       if (!used[it.name]) out.push(it);
+    });
+    return out;
+  }
+
+  // 補足情報にまだ表示していない週課キャラ(アカウントごとに重複なし)
+  function suppUnshown() {
+    var out = [];
+    state.accounts.forEach(function (a) {
+      var seen = {};
+      state.sections.forEach(function (s) {
+        s.chars.forEach(function (c) {
+          if (c.accountId !== a.id || !c.name || seen[c.name]) return;
+          seen[c.name] = true;
+          if (!isSuppShown(a.id, c.name) && !extraHasName(a.id, c.name)) out.push({ a: a, name: c.name });
+        });
+      });
     });
     return out;
   }
@@ -942,6 +1145,28 @@
     return wrap;
   }
 
+  // 補足情報に追加できるキャラの一覧(クリックで表示に追加)
+  function renderSuppPool() {
+    var box = $("suppPool");
+    box.innerHTML = "";
+    var chips = suppUnshown();
+    box.classList.toggle("has", chips.length > 0);
+    if (!chips.length) return;
+
+    box.appendChild(el("p", "supp-pool-title", "補足情報に追加できるキャラ(クリックで一覧に追加します)"));
+    var list = el("div", "supp-pool-list");
+    chips.forEach(function (c) {
+      var chip = el("button", "pool-chip", (c.a.name || "(無題)") + " / " + c.name + "  ＋");
+      chip.type = "button";
+      chip.dataset.account = c.a.id;
+      chip.dataset.name = c.name;
+      chip.title = "補足情報に追加する";
+      chip.addEventListener("click", function () { showSupp(c.a.id, c.name); });
+      list.appendChild(chip);
+    });
+    box.appendChild(list);
+  }
+
   function renderSupp() {
     var box = $("suppList");
     box.innerHTML = "";
@@ -990,8 +1215,8 @@
         row.appendChild(mo);
         row.appendChild(memo);
 
-        // この欄だけで追加したキャラ(週課に存在しないキャラ)は削除できる
         if (it.extraId) {
+          // この欄だけで追加したキャラ: 完全に削除(月・補足も消える)
           var del = el("button", "btn-del", "✕");
           del.type = "button";
           del.title = "このキャラクターを補足情報から削除";
@@ -1003,6 +1228,13 @@
             renderSupp();
           });
           row.appendChild(del);
+        } else {
+          // 週課のキャラ: この欄から外すだけ(週課側・月・補足は残る)
+          var hide = el("button", "btn-hide", "非表示");
+          hide.type = "button";
+          hide.title = "補足情報欄から外します(週課のキャラは削除されません)";
+          hide.addEventListener("click", function () { hideSupp(a.id, it.name); });
+          row.appendChild(hide);
         }
         bindSuppDrag(row, handle, a, it.name);
         blk.appendChild(row);
@@ -1011,8 +1243,11 @@
     });
 
     if (!any) {
-      box.appendChild(el("p", "empty-hint", "キャラクターがまだありません。「キャラ追加」で登録すると、ここにアカウントごとに一覧表示されます。"));
+      box.appendChild(el("p", "empty-hint", suppUnshown().length
+        ? "補足情報に表示するキャラがありません。下の一覧から追加してください。"
+        : "キャラクターがまだありません。「キャラ追加」で登録するか、週課にキャラを追加してください。"));
     }
+    renderSuppPool();
   }
 
   /* ================= 週課セクションの描画 ================= */
@@ -1045,20 +1280,26 @@
       }
       head.appendChild(name);
 
-      // ヒペリオン: 登録キャラの選択(翌週に装備を持つキャラ)
+      // ヒペリオン: 「テイマ」「とどめ」のキャラ選択(クリアしても保持)
       if (s.key === "hyperion") {
-        var pick = el("select", "section-pick");
-        pick.title = "翌週に装備を持つキャラ(クリアしても保持されます)";
-        fillPick(pick, s);
-        pick.addEventListener("change", function () {
-          s.pick = pick.value;
-          save();
+        var group = el("div", "pick-group");
+        [["テイマ", "pickTame"], ["とどめ", "pick"]].forEach(function (def) {
+          var item = el("label", "pick-item");
+          item.appendChild(el("span", "pick-label", def[0]));
+          var pick = el("select", "section-pick");
+          pick.title = def[0] + "のキャラ(クリアしても保持されます)";
+          fillPick(pick, s, def[1]);
+          pick.addEventListener("change", function () {
+            s[def[1]] = pick.value;
+            save();
+          });
+          item.appendChild(pick);
+          group.appendChild(item);
         });
-        var labelSpan = document.createElement("span");
-        labelSpan.textContent = "とどめ保持："; // ここに好きな文字を入れてください
-        head.appendChild(labelSpan);
-        head.appendChild(pick);
+        head.appendChild(group);
       }
+
+      head.appendChild(el("span", "done-badge", "完了"));
 
       var progress = el("span", "section-progress");
       progress.dataset.section = s.id;
@@ -1082,7 +1323,7 @@
       box.appendChild(head);
 
       if (!s.chars.length) {
-        box.appendChild(el("p", "empty-hint", "上部の「キャラ追加」からキャラクターを追加できます"));
+        box.appendChild(el("p", "empty-hint", "上部の「追加メニュー」からキャラクターを追加できます"));
       }
 
       // アカウントごとのサブセクション(キャラが存在するアカウントのみ表示)
@@ -1124,6 +1365,7 @@
         });
 
         ah.appendChild(an);
+        ah.appendChild(el("span", "done-badge", "完了"));
         ah.appendChild(ap);
         ah.appendChild(delAcc);
         acc.appendChild(ah);
@@ -1299,6 +1541,16 @@
       if (e.target === helpModal) closeHelp();
     });
 
+    // 追加メニューの開閉
+    $("addMenuBtn").addEventListener("click", toggleAddPanel);
+
+    // 元に戻す
+    $("toastUndo").addEventListener("click", function () {
+      var f = toastUndoFn;
+      hideToast();
+      if (f) f();
+    });
+
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
         if (helpModal.classList.contains("open")) closeHelp();
@@ -1313,7 +1565,7 @@
     });
 
     $("addSection").addEventListener("click", addSection);
-    $("clearBtn").addEventListener("click", clearAll);
+    $("clearBtn").addEventListener("click", requestClear);
     $("bulkAdd").addEventListener("click", bulkAdd);
     $("accountAdd").addEventListener("click", addAccount);
     $("suppAdd").addEventListener("click", suppAdd);
@@ -1343,7 +1595,6 @@
       }
     });
     $("bulkName").addEventListener("input", growBulk);
-    growBulk();
 
     $("exportBtn").addEventListener("click", exportData);
     $("importBtn").addEventListener("click", function () { $("importFile").click(); });
@@ -1379,6 +1630,8 @@
       .then(function () {
         bindEvents();
         render();
+        // アカウントが1件もないときは、追加メニューを開いた状態で始める
+        if (!state.accounts.length) setAddPanel(true);
         // ブラウザによる自動削除の対象外にするよう要求(許可はブラウザ次第)
         if (navigator.storage && navigator.storage.persist) {
           navigator.storage.persist().catch(function () {});
