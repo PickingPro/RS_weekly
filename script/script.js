@@ -611,6 +611,24 @@
     return chars.length > 0 && chars.every(function (c) { return c.checked; });
   }
 
+  // タビアクートの数字(全アカウント分)の合計。空欄は0として扱う
+  function tabiSum(s) {
+    var sum = 0;
+    s.chars.forEach(function (c) {
+      var n = parseInt(c.num, 10);
+      if (isFinite(n)) sum += n;
+    });
+    return sum;
+  }
+
+  function refreshTabiSum() {
+    var list = document.querySelectorAll(".tabi-sum");
+    for (var i = 0; i < list.length; i++) {
+      var s = find(list[i].dataset.section);
+      if (s) list[i].textContent = "タビかけ：" + tabiSum(s);
+    }
+  }
+
   function refreshProgress() {
     var list = document.querySelectorAll(".section-progress");
     var i, n, s, box;
@@ -633,6 +651,7 @@
       box = n.closest(".account");
       if (box) box.classList.toggle("complete", allChecked(chars));
     }
+    refreshTabiSum();
   }
 
   /* ================= キャラ名の文字を枠幅に合わせて自動縮小 ================= */
@@ -1301,6 +1320,14 @@
 
       head.appendChild(el("span", "done-badge", "完了"));
 
+      // タビアクート: 全アカウントの数字の合計(完了数/合計の左隣)
+      if (s.key === "tabiakuto") {
+        var tsum = el("span", "tabi-sum", "タビかけ：" + tabiSum(s));
+        tsum.dataset.section = s.id;
+        tsum.title = "タビアクートの数字(全アカウント)の合計";
+        head.appendChild(tsum);
+      }
+
       var progress = el("span", "section-progress");
       progress.dataset.section = s.id;
       head.appendChild(progress);
@@ -1454,6 +1481,7 @@
               var v = toHalf(num.value).replace(/\D/g, "").slice(0, 2);
               if (v !== num.value) num.value = v;
               c.num = v;
+              refreshTabiSum();
               save();
             };
             num.addEventListener("input", function (e) {
