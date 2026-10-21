@@ -340,6 +340,13 @@ main {
   color: var(--muted);
   white-space: nowrap;
 }
+/* タビアクートの数字合計(タビかけ) */
+.tabi-sum {
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--c);
+  white-space: nowrap;
+}
 .btn-del {
   cursor: pointer;
   border: none;
