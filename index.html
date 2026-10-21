@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<link rel="icon" href="images/P.png" type="image/png">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>REDSTONE コンテンツ管理ツール</title>
@@ -12,11 +11,12 @@
   <div class="top-row">
     <h1><span class="game">REDSTONE</span> コンテンツ管理ツール</h1>
     <div class="top-actions">
+      <button id="addMenuBtn" type="button" aria-expanded="false" aria-controls="addPanel" title="アカウント・キャラの追加、バックアップの欄を開閉します"><span class="am-arrow">▸</span>追加メニュー</button>
       <button id="helpBtn" type="button" title="使い方を表示します"><span class="help-mark">?</span>使い方</button>
       <button id="clearBtn" type="button">クリア</button>
     </div>
   </div>
-  <div class="bulk-row">
+  <div class="bulk-row collapsed" id="addPanel">
     <div class="bulk-line">
       <span class="bulk-title">アカウント追加</span>
       <input id="accountName" type="text" placeholder="アカウント名を入力" autocomplete="off">
@@ -54,10 +54,17 @@
       </div>
     </div>
     <div id="suppList"></div>
+    <div id="suppPool" class="supp-pool"></div>
   </section>
 </main>
 
 <button id="resetFab" type="button" title="全データを初期化" aria-label="全データを初期化">初期化</button>
+
+<div id="toast" role="status" aria-live="polite">
+  <span id="toastMsg"></span>
+  <button id="toastUndo" type="button">元に戻す</button>
+  <span class="toast-bar"></span>
+</div>
 
 <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
   <div class="dialog">
@@ -76,11 +83,11 @@
     <div class="help-body">
       <h3>1. アカウントを登録</h3>
       <ul>
-        <li>最上部の「アカウント追加」欄に名前を入力して登録します。登録だけでは週課に何も作られません。</li>
+        <li>上部の「追加メニュー」を開き、「アカウント追加」欄に名前を入力して登録します。登録だけでは週課に何も作られません。</li>
       </ul>
       <h3>2. キャラを追加</h3>
       <ul>
-        <li>キャラ名を入力し、追加先アカウントを選んで「キャラ追加」を押します。</li>
+        <li>「追加メニュー」内で、キャラ名を入力し、追加先アカウントを選んで「キャラ追加」を押します。</li>
         <li>スペース・改行・カンマ区切りで、複数キャラをまとめて追加できます。</li>
         <li>右側のチェックが入っている週課すべてに追加されます。</li>
         <li>「引率」にチェックして追加すると、金色の引率キャラになります。</li>
@@ -88,7 +95,8 @@
       <h3>3. クリア状況の記録</h3>
       <ul>
         <li>キャラカードをクリックするとチェックが切り替わります。</li>
-        <li>右上の「クリア」はチェックだけを外します。ヒペリオンの選択、タビアクートの数字、補足情報は残ります。</li>
+        <li>全員がチェック済みになった週課・アカウントは、枠が淡くなり「完了」と表示されます。</li>
+        <li>右上の「クリア」はチェックだけを外します。確認後、5秒間だけ「元に戻す」で取り消せます。ヒペリオンの選択、タビアクートの数字、補足情報は残ります。</li>
       </ul>
       <h3>4. キャラカードの操作</h3>
       <ul>
@@ -99,17 +107,19 @@
       <h3>5. 週課セクション</h3>
       <ul>
         <li>ヒペリオンとタビアクートは固定です。「+」で週課を追加でき、追加分は名前変更と削除ができます。</li>
+        <li>ヒペリオンの「テイマ」「とどめ」では、それぞれ対象のキャラを選べます。</li>
         <li>アカウント見出しの「✕」で、その週課からそのアカウントのキャラをまとめて外せます。</li>
       </ul>
       <h3>6. 補足情報</h3>
       <ul>
-        <li>全キャラがアカウントごとに一覧表示され、月(1〜12)と補足メモを記録できます。</li>
-        <li>週課に参加しないキャラは、この欄の「キャラ追加」で登録できます。</li>
+        <li>週課のキャラは、初期状態では補足情報に表示されません。下の「補足情報に追加できるキャラ」から、記録したいキャラをクリックして追加します。</li>
+        <li>表示中のキャラは、月(1〜12)と補足メモを記録できます。不要になったら「非表示」で一覧に戻せます。週課のキャラは消えません。</li>
+        <li>週課に参加しないキャラは、この欄の「キャラ追加」で登録できます。この欄だけのキャラは「✕」で削除できます。</li>
       </ul>
       <h3>7. 保存とバックアップ</h3>
       <ul>
         <li>入力内容は自動でブラウザ内に保存されます。</li>
-        <li>「エクスポート」「インポート」で、バックアップや別のブラウザへの移行ができます。定期的な保存をおすすめします。</li>
+        <li>「追加メニュー」内の「エクスポート」「インポート」で、バックアップや別のブラウザへの移行ができます。定期的な保存をおすすめします。</li>
         <li>右下の「初期化」は、全データを削除します。元に戻せません。</li>
       </ul>
     </div>
