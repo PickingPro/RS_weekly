@@ -347,6 +347,29 @@ main {
   color: var(--c);
   white-space: nowrap;
 }
+/* タビアクートのチケット入力(3桁まで) */
+.ticket-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--c);
+  white-space: nowrap;
+}
+.ticket-input {
+  width: 3.6em;
+  padding: 4px 2px;
+  font-size: .85rem;
+  text-align: center;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  border-radius: 6px;
+  outline: none;
+}
+.ticket-input:focus { border-color: var(--c); }
+.ticket-input::placeholder { color: var(--muted); }
 .btn-del {
   cursor: pointer;
   border: none;
