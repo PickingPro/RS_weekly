@@ -117,6 +117,7 @@
           color: isFinite(s.color) ? Math.max(0, Math.floor(s.color)) : 0,
           pick: typeof s.pick === "string" ? s.pick : "",            // ヒペリオン「とどめ」
           pickTame: typeof s.pickTame === "string" ? s.pickTame : "", // ヒペリオン「テイマ」
+          ticket: toHalf(s.ticket == null ? "" : s.ticket).replace(/\D/g, "").slice(0, 3), // タビアクート「チケット」
           chars: []
         };
         var isReq = REQUIRED.some(function (r) { return r.key === s.key; });
@@ -140,7 +141,7 @@
       var f = null;
       d.sections.forEach(function (s) { if (s.key === r.key) f = s; });
       if (!f) {
-        f = { id: uid(), key: r.key, name: r.name, color: r.color, pick: "", pickTame: "", chars: [] };
+        f = { id: uid(), key: r.key, name: r.name, color: r.color, pick: "", pickTame: "", ticket: "", chars: [] };
         d.sections.splice(Math.min(i, d.sections.length), 0, f);
       }
       f.name = r.name;
@@ -329,6 +330,7 @@
       color: nextColorIndex(),
       pick: "",
       pickTame: "",
+      ticket: "",
       chars: []
     });
     save();
@@ -477,13 +479,13 @@
     }
     openConfirm({
       title: "チェックをすべて外しますか?",
-      text: "全キャラのチェックを外します。ヒペリオンの選択、タビアクートの数字、補足情報は消えません。\n実行後、5秒間だけ「元に戻す」で取り消せます。",
+      text: "全キャラのチェックを外します。ヒペリオンの選択、タビアクートの数字・チケット、補足情報は消えません。\n実行後、5秒間だけ「元に戻す」で取り消せます。",
       okLabel: "クリア",
       onOk: doClear
     });
   }
 
-  // チェックボックスのみ全解除(ヒペリオン選択・数字・補足情報は保持)
+  // チェックボックスのみ全解除(ヒペリオン選択・数字・チケット・補足情報は保持)
   function doClear() {
     var ids = checkedIds();
     if (!ids.length) return;
@@ -1318,15 +1320,40 @@
         head.appendChild(group);
       }
 
-      head.appendChild(el("span", "done-badge", "完了"));
-
-      // タビアクート: 全アカウントの数字の合計(完了数/合計の左隣)
+      // タビアクート: チケット入力(3桁まで)と、全アカウントの数字の合計
       if (s.key === "tabiakuto") {
+        var tw = el("label", "ticket-wrap");
+        tw.appendChild(document.createTextNode("チケット："));
+        var tk = el("input", "ticket-input");
+        tk.type = "text";
+        tk.setAttribute("inputmode", "numeric");
+        tk.maxLength = 3;
+        tk.autocomplete = "off";
+        tk.placeholder = "000";
+        tk.title = "チケット(3桁まで・クリアしても保持されます)";
+        tk.value = s.ticket || "";
+        var applyTicket = function () {
+          var v = toHalf(tk.value).replace(/\D/g, "").slice(0, 3);
+          if (v !== tk.value) tk.value = v;
+          s.ticket = v;
+          save();
+        };
+        tk.addEventListener("input", function (e) {
+          if (e.isComposing) return;
+          applyTicket();
+        });
+        tk.addEventListener("compositionend", applyTicket);
+        tw.appendChild(tk);
+        head.appendChild(tw);
+
         var tsum = el("span", "tabi-sum", "タビかけ：" + tabiSum(s));
         tsum.dataset.section = s.id;
         tsum.title = "タビアクートの数字(全アカウント)の合計";
         head.appendChild(tsum);
       }
+
+      // 完了バッジ: 完了数/合計の直前(左隣)に配置
+      head.appendChild(el("span", "done-badge", "完了"));
 
       var progress = el("span", "section-progress");
       progress.dataset.section = s.id;
