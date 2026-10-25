@@ -940,17 +940,17 @@ main {
   padding-right: 6px;
   overflow-y: auto;
   scrollbar-width: thin;
+  column-count: 2;
+  column-gap: 32px;
 }
 .help-body h3 {
   margin: 14px 0 4px;
   font-size: .95rem;
   color: var(--accent);
-  column-count: 2;
-  column-gap: 32px;
+  break-after: avoid;
 }
 .help-body h3:first-child { 
   margin-top: 0;
-  break-after: avoid;
  }
 .help-body ul {
   margin: 0;
