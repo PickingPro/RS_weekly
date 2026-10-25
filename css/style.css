@@ -930,7 +930,7 @@ main {
 .help-dialog {
   display: flex;
   flex-direction: column;
-  max-width: 560px;
+  max-width: 1120px;
   max-height: 85vh;
 }
 .help-body {
