@@ -11,6 +11,12 @@
   var toastTimer = null;
   var toastUndoFn = null;
 
+  // いずれかのダイアログが開いている間は、背後の画面のスクロールを止める
+  function syncScrollLock() {
+    var open = modal.classList.contains("open") || helpModal.classList.contains("open");
+    document.documentElement.classList.toggle("modal-open", open);
+  }
+
   /* ---------- 確認ダイアログ ---------- */
   RS.openConfirm = function (o) {
     $("modalTitle").textContent = o.title;
@@ -18,22 +24,26 @@
     $("modalOk").textContent = o.okLabel;
     modalAction = o.onOk;
     modal.classList.add("open");
+    syncScrollLock();
     $("modalCancel").focus();   // 誤操作防止のためキャンセルに初期フォーカス
   };
 
   RS.closeModal = function () {
     modal.classList.remove("open");
     modalAction = null;
+    syncScrollLock();
   };
 
   /* ---------- ヘルプ ---------- */
   RS.openHelp = function () {
     helpModal.classList.add("open");
+    syncScrollLock();
     $("helpClose").focus();
   };
 
   RS.closeHelp = function () {
     helpModal.classList.remove("open");
+    syncScrollLock();
   };
 
   /* ---------- トースト ---------- */
