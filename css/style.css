@@ -20,6 +20,10 @@ body {
 }
 select option, select optgroup { background: var(--card); color: var(--text); }
 
+/* ダイアログ表示中は背後の画面をスクロールさせない */
+html { scrollbar-gutter: stable; }
+html.modal-open { overflow: hidden; }
+
 header {
   position: sticky;
   top: 0;
@@ -271,8 +275,9 @@ main {
   gap: 10px;
   margin-bottom: 14px;
 }
+/* 週課タイトル: 約12文字分の幅。左に未完了/完了の表示があるため少し右に寄る */
 .section-name {
-  flex: 1;
+  flex: 0 1 13.5em;
   min-width: 100px;
   font-size: 1.15rem;
   font-weight: 700;
@@ -289,7 +294,25 @@ main {
   border-bottom-color: transparent;
 }
 
-/* 完了バッジ(週課・アカウント共通。完了時のみ表示) */
+/* 週課の状態表示(タイトルの左): 未完了 / 完了 */
+.section-status {
+  display: inline-block;
+  min-width: 4.2em;
+  padding: 1px 9px;
+  font-size: .72rem;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--muted);
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 999px;
+}
+.section.complete > .section-head .section-status {
+  color: var(--c);
+  border-color: color-mix(in srgb, var(--c) 60%, transparent);
+}
+
+/* 完了バッジ(アカウント用。完了時のみ表示) */
 .done-badge {
   display: none;
   padding: 1px 9px;
@@ -300,7 +323,6 @@ main {
   border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
   border-radius: 999px;
 }
-.section.complete > .section-head .done-badge,
 .account.complete > .account-head .done-badge { display: inline-block; }
 .account .done-badge { font-size: .68rem; padding: 0 7px; }
 
@@ -336,6 +358,7 @@ main {
   cursor: pointer;
 }
 .section-progress {
+  margin-left: auto;
   font-size: .85rem;
   color: var(--muted);
   white-space: nowrap;
@@ -401,12 +424,13 @@ main {
 .account-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   margin-bottom: 8px;
 }
 .account-name {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 6em;
+  min-width: 6em;
   font-size: .95rem;
   font-weight: 700;
   color: var(--text);
@@ -939,6 +963,7 @@ main {
   margin-bottom: 16px;
   padding-right: 6px;
   overflow-y: auto;
+  overscroll-behavior: contain;   /* 本文の端でスクロールが背後に伝わらないようにする */
   scrollbar-width: thin;
   column-count: 2;
   column-gap: 32px;
@@ -949,9 +974,9 @@ main {
   color: var(--accent);
   break-after: avoid;
 }
-.help-body h3:first-child { 
+.help-body h3:first-child {
   margin-top: 0;
- }
+}
 .help-body ul {
   margin: 0;
   padding-left: 1.3em;
