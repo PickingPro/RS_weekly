@@ -357,11 +357,16 @@ main {
   outline: none;
   cursor: pointer;
 }
+/* クリア数: 桁数が変わっても幅が変わらないよう「11 / 11」が入る幅に固定して右寄せ */
 .section-progress {
   margin-left: auto;
+  flex: 0 0 auto;
+  min-width: 5.2em;
+  text-align: right;
   font-size: .85rem;
   color: var(--muted);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 /* タビアクートの数字合計(タビかけ) */
 .tabi-sum {
