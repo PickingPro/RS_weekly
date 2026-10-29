@@ -294,6 +294,16 @@ main {
   border-bottom-color: transparent;
 }
 
+/* 必須セクション(ヒペリオン・タビアクート)の見出し:
+   タイトル欄を約7em(8文字分)に狭め、折り返さず1行に並べる(クリア数は必ず右端) */
+.section-head:has(.section-name.fixed) {
+  flex-wrap: nowrap;
+}
+.section-head:has(.section-name.fixed) .section-name {
+  flex: 0 0 7em;
+  min-width: 0;
+}
+
 /* 週課の状態表示(タイトルの左): 未完了 / 完了 */
 .section-status {
   display: inline-block;
