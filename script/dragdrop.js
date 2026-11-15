@@ -1,8 +1,11 @@
-// 週課内(同じアカウント内)のキャラのドラッグ&ドロップ並べ替え
+// ドラッグ&ドロップ並べ替え(週課内のキャラ・週課セクション)
 (function () {
   "use strict";
 
   var RS = window.RS;
+  var $ = RS.$;
+
+  RS.secDrag = null;   // 週課ドラッグ中の情報 { sid }
 
   RS.clearDrop = function () {
     var list = document.querySelectorAll(".drop-before, .drop-after, .drop-end");
@@ -11,6 +14,7 @@
     }
   };
 
+  /* ================= キャラ(同じアカウント内) ================= */
   function indexOfChar(s, id) {
     for (var i = 0; i < s.chars.length; i++) {
       if (s.chars[i].id === id) return i;
@@ -103,6 +107,99 @@
       moveChar(s, RS.drag.cid, null, false, a.id);
       RS.save();
       RS.drag = null;
+      RS.clearDrop();
+      RS.render();
+    });
+  };
+
+  /* ================= 週課セクション ================= */
+  // targetId の前後(なければ末尾)へ移動して保存する
+  function moveSection(sectionId, targetId, after) {
+    var list = RS.state.sections;
+    var from = -1, i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i].id === sectionId) { from = i; break; }
+    }
+    if (from < 0) return;
+    var s = list.splice(from, 1)[0];
+    var pos = list.length;
+    if (targetId) {
+      for (i = 0; i < list.length; i++) {
+        if (list[i].id === targetId) { pos = i + (after ? 1 : 0); break; }
+      }
+    }
+    list.splice(pos, 0, s);
+    RS.save();
+  }
+
+  // 1列表示(900px以下)は上下、2列表示は左右で前後を判定する
+  function isAfterSection(e, box) {
+    var r = box.getBoundingClientRect();
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      return e.clientY > r.top + r.height / 2;
+    }
+    return e.clientX > r.left + r.width / 2;
+  }
+
+  RS.bindSectionDrag = function (box, handle, s) {
+    // ハンドルを押したときだけ週課をドラッグ可能にする(入力欄の操作を妨げないため)
+    handle.addEventListener("mousedown", function () { box.draggable = true; });
+    handle.addEventListener("mouseup", function () { box.draggable = false; });
+
+    box.addEventListener("dragstart", function (e) {
+      if (e.target !== box) return;   // キャラカードのドラッグは対象外
+      RS.secDrag = { sid: s.id };
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", s.id); } catch (err) {}
+      try { e.dataTransfer.setDragImage(box, 20, 16); } catch (err) {}
+      setTimeout(function () { box.classList.add("dragging"); }, 0);
+    });
+
+    box.addEventListener("dragend", function (e) {
+      if (e.target !== box) return;
+      box.draggable = false;
+      box.classList.remove("dragging");
+      RS.secDrag = null;
+      RS.clearDrop();
+    });
+
+    box.addEventListener("dragover", function (e) {
+      if (!RS.secDrag) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
+      RS.clearDrop();
+      if (RS.secDrag.sid === s.id) return;
+      box.classList.add(isAfterSection(e, box) ? "drop-after" : "drop-before");
+    });
+
+    box.addEventListener("drop", function (e) {
+      if (!RS.secDrag) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (RS.secDrag.sid !== s.id) {
+        moveSection(RS.secDrag.sid, s.id, isAfterSection(e, box));
+      }
+      RS.secDrag = null;
+      RS.clearDrop();
+      RS.render();
+    });
+  };
+
+  // 週課同士の隙間にドロップしたら、末尾へ移動する(起動時に1回だけ登録)
+  RS.bindSectionDrop = function () {
+    var root = $("sections");
+    root.addEventListener("dragover", function (e) {
+      if (!RS.secDrag) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      RS.clearDrop();
+    });
+    root.addEventListener("drop", function (e) {
+      if (!RS.secDrag) return;
+      e.preventDefault();
+      moveSection(RS.secDrag.sid, null, false);
+      RS.secDrag = null;
       RS.clearDrop();
       RS.render();
     });

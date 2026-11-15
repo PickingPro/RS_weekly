@@ -180,7 +180,7 @@ select.is-empty { color: var(--muted); }
   user-select: none;
 }
 .target.leader-toggle { --c: var(--leader); font-weight: 700; }
-.target input {
+.target input, .dup-item input {
   appearance: none;
   -webkit-appearance: none;
   width: 14px;
@@ -193,8 +193,8 @@ select.is-empty { color: var(--muted); }
   position: relative;
   flex: none;
 }
-.target input:checked { background: var(--c); }
-.target input:checked::after {
+.target input:checked, .dup-item input:checked { background: var(--c); }
+.target input:checked::after, .dup-item input:checked::after {
   content: "";
   position: absolute;
   left: 3px; top: 0;
@@ -268,6 +268,11 @@ main {
   border-color: color-mix(in srgb, var(--c) 28%, transparent);
   box-shadow: 0 0 0 1px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.2);
 }
+/* 週課のドラッグ&ドロップ(並べ替え) */
+.section.dragging { opacity: .4; }
+.section.drop-before { box-shadow: -8px 0 0 0 #fff; }
+.section.drop-after { box-shadow: 8px 0 0 0 #fff; }
+
 .section-head {
   display: flex;
   align-items: center;
@@ -275,6 +280,19 @@ main {
   gap: 10px;
   margin-bottom: 14px;
 }
+
+/* 週課のドラッグ用ハンドル(見出し左端の帯) */
+.section-handle {
+  flex: none;
+  align-self: stretch;
+  width: 10px;
+  min-height: 22px;
+  border-radius: 5px;
+  background: radial-gradient(rgba(0,0,0,.5) 1px, transparent 1.6px) center / 5px 6px, var(--c);
+  cursor: grab;
+}
+.section-handle:active { cursor: grabbing; }
+
 /* 週課タイトル: 約12文字分の幅。左に未完了/完了の表示があるため少し右に寄る */
 .section-name {
   flex: 0 1 13.5em;
@@ -614,8 +632,14 @@ main {
 .char-actions button:hover { color: #fff; background: rgba(255,255,255,.15); }
 .char-actions .btn-leader.on { color: var(--leader); font-weight: 700; }
 
-#addSection {
+/* 週課の追加・複製ボタン */
+.section-add-row {
   align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+#addSection {
   cursor: pointer;
   width: 64px; height: 64px;
   border-radius: 50%;
@@ -627,6 +651,20 @@ main {
   transition: all .15s;
 }
 #addSection:hover { color: #fff; border-color: #fff; background: rgba(255,255,255,.06); transform: scale(1.06); }
+#dupSection {
+  cursor: pointer;
+  height: 64px;
+  padding: 0 24px;
+  border-radius: 999px;
+  border: 2px dashed rgba(255,255,255,.3);
+  background: transparent;
+  color: var(--muted);
+  font-size: .95rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all .15s;
+}
+#dupSection:hover { color: #fff; border-color: #fff; background: rgba(255,255,255,.06); transform: scale(1.04); }
 
 /* 補足情報 */
 .supp {
@@ -919,8 +957,8 @@ main {
   to { transform: scaleX(0); }
 }
 
-/* 確認ダイアログ・ヘルプダイアログ */
-#modal, #helpModal {
+/* 確認ダイアログ・複製ダイアログ・ヘルプダイアログ */
+#modal, #dupModal, #helpModal {
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -931,7 +969,7 @@ main {
   background: rgba(0,0,0,.6);
   backdrop-filter: blur(3px);
 }
-#modal.open, #helpModal.open { display: flex; }
+#modal.open, #dupModal.open, #helpModal.open { display: flex; }
 .dialog {
   width: 100%;
   max-width: 440px;
@@ -952,18 +990,48 @@ main {
   font-size: .9rem;
   font-weight: 700;
 }
-#modalCancel, #helpClose {
+#modalCancel, #dupCancel, #helpClose {
   color: var(--text);
   background: transparent;
   border: 1px solid rgba(255,255,255,.25);
 }
-#modalCancel:hover, #helpClose:hover { background: rgba(255,255,255,.08); }
-#modalOk {
+#modalCancel:hover, #dupCancel:hover, #helpClose:hover { background: rgba(255,255,255,.08); }
+#modalOk, #dupOk {
   color: #fff;
   border: none;
   background: linear-gradient(135deg, #e0463c, #b82d4a);
 }
-#modalOk:hover { filter: brightness(1.12); }
+#modalOk:hover, #dupOk:hover { filter: brightness(1.12); }
+
+/* 複製する週課の一覧 */
+.dup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  margin-bottom: 20px;
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.dup-item {
+  --c: #e0463c;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border: 1px solid var(--c);
+  border-radius: 10px;
+  font-size: .92rem;
+  font-weight: 700;
+  color: var(--c);
+  cursor: pointer;
+  user-select: none;
+}
+.dup-item:hover { background: color-mix(in srgb, var(--c) 10%, transparent); }
+.dup-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dup-count { font-size: .78rem; font-weight: 400; color: var(--muted); white-space: nowrap; }
 
 /* ヘルプダイアログ(内容が長い場合は本文をスクロール) */
 .help-dialog {
@@ -1007,6 +1075,9 @@ main {
 }
 @media (max-width: 900px) {
   #sections { grid-template-columns: minmax(0, 1fr); }
+  /* 1列表示では週課の挿入位置を上下のバーで示す */
+  .section.drop-before { box-shadow: 0 -8px 0 0 #fff; }
+  .section.drop-after { box-shadow: 0 8px 0 0 #fff; }
 }
 @media (max-width: 720px) {
   header { padding: 10px 14px; }

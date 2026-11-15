@@ -285,7 +285,15 @@
       box.dataset.section = s.id;
       box.style.setProperty("--c", RS.COLORS[s.color % RS.COLORS.length]);
 
-      box.appendChild(buildSectionHead(s, req));
+      var head = buildSectionHead(s, req);
+
+      // 見出し左端: 週課のドラッグ用ハンドル
+      var sh = el("span", "section-handle");
+      sh.title = "ドラッグして週課を並べ替え";
+      head.insertBefore(sh, head.firstChild);
+      RS.bindSectionDrag(box, sh, s);
+
+      box.appendChild(head);
 
       if (!s.chars.length) {
         box.appendChild(el("p", "empty-hint", "上部の「追加メニュー」からキャラクターを追加できます"));
