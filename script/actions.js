@@ -1,4 +1,4 @@
-// 週課の追加・クリア(元に戻す付き)・全データ初期化
+// 週課の追加・複製・クリア(元に戻す付き)・全データ初期化
 (function () {
   "use strict";
 
@@ -19,6 +19,40 @@
     });
     RS.save();
     RS.render();
+  }
+
+  /* ---------- 週課の複製 ---------- */
+  // 選択した週課と同じキャラクター群を持つ週課を、末尾に追加する
+  // (チェック・タビアクートの数字・ヒペリオンの選択・チケットは引き継がない。タイトルは編集可能)
+  function duplicateSections(ids) {
+    var set = {};
+    ids.forEach(function (id) { set[id] = true; });
+    var sources = RS.state.sections.filter(function (s) { return set[s.id]; });
+
+    sources.forEach(function (s) {
+      RS.state.sections.push({
+        id: uid(),
+        name: (s.name || "週課") + " コピー",
+        color: RS.nextColorIndex(),
+        pick: "",
+        pickTame: "",
+        ticket: "",
+        chars: s.chars.map(function (c) {
+          return {
+            id: uid(),
+            name: c.name,
+            checked: false,
+            leader: !!c.leader,
+            accountId: c.accountId,
+            num: ""
+          };
+        })
+      });
+    });
+
+    RS.save();
+    RS.render();
+    RS.showToast(sources.length + "件の週課を複製しました", null, 2500);
   }
 
   /* ---------- クリア(確認 → 実行 → 5秒間だけ元に戻せる) ---------- */
@@ -85,6 +119,7 @@
 
   RS.bindActions = function () {
     $("addSection").addEventListener("click", addSection);
+    $("dupSection").addEventListener("click", function () { RS.openDup(duplicateSections); });
     $("clearBtn").addEventListener("click", requestClear);
     $("resetFab").addEventListener("click", function () {
       RS.openConfirm({

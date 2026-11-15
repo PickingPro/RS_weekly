@@ -1,19 +1,23 @@
-// 確認ダイアログ・ヘルプダイアログ・トースト(元に戻す)
+// 確認ダイアログ・複製ダイアログ・ヘルプダイアログ・トースト(元に戻す)
 (function () {
   "use strict";
 
   var RS = window.RS;
-  var $ = RS.$;
+  var $ = RS.$, el = RS.el;
 
   var modal = $("modal");
+  var dupModal = $("dupModal");
   var helpModal = $("helpModal");
   var modalAction = null;
+  var dupAction = null;
   var toastTimer = null;
   var toastUndoFn = null;
 
   // いずれかのダイアログが開いている間は、背後の画面のスクロールを止める
   function syncScrollLock() {
-    var open = modal.classList.contains("open") || helpModal.classList.contains("open");
+    var open = modal.classList.contains("open") ||
+      dupModal.classList.contains("open") ||
+      helpModal.classList.contains("open");
     document.documentElement.classList.toggle("modal-open", open);
   }
 
@@ -31,6 +35,36 @@
   RS.closeModal = function () {
     modal.classList.remove("open");
     modalAction = null;
+    syncScrollLock();
+  };
+
+  /* ---------- 週課の複製ダイアログ ---------- */
+  // onOk(選択された週課IDの配列) を呼ぶ
+  RS.openDup = function (onOk) {
+    var list = $("dupList");
+    list.innerHTML = "";
+    RS.state.sections.forEach(function (s) {
+      var label = el("label", "dup-item");
+      label.style.setProperty("--c", RS.COLORS[s.color % RS.COLORS.length]);
+
+      var cb = el("input");
+      cb.type = "checkbox";
+      cb.value = s.id;
+
+      label.appendChild(cb);
+      label.appendChild(el("span", "dup-name", s.name || "(無題)"));
+      label.appendChild(el("span", "dup-count", s.chars.length + "人"));
+      list.appendChild(label);
+    });
+    dupAction = onOk;
+    dupModal.classList.add("open");
+    syncScrollLock();
+    $("dupCancel").focus();
+  };
+
+  RS.closeDup = function () {
+    dupModal.classList.remove("open");
+    dupAction = null;
     syncScrollLock();
   };
 
@@ -81,6 +115,23 @@
       if (e.target === modal) RS.closeModal();
     });
 
+    // 複製ダイアログ
+    $("dupCancel").addEventListener("click", RS.closeDup);
+    $("dupOk").addEventListener("click", function () {
+      var ids = [];
+      var boxes = $("dupList").querySelectorAll("input[type=checkbox]");
+      for (var i = 0; i < boxes.length; i++) {
+        if (boxes[i].checked) ids.push(boxes[i].value);
+      }
+      if (!ids.length) { alert("複製する週課を選択してください。"); return; }
+      var f = dupAction;
+      RS.closeDup();
+      if (f) f(ids);
+    });
+    dupModal.addEventListener("click", function (e) {
+      if (e.target === dupModal) RS.closeDup();
+    });
+
     $("helpBtn").addEventListener("click", RS.openHelp);
     $("helpClose").addEventListener("click", RS.closeHelp);
     helpModal.addEventListener("click", function (e) {
@@ -96,6 +147,7 @@
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
         if (helpModal.classList.contains("open")) RS.closeHelp();
+        if (dupModal.classList.contains("open")) RS.closeDup();
         if (modal.classList.contains("open")) RS.closeModal();
       }
     });

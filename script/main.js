@@ -20,6 +20,7 @@
     RS.bindBackup();
     RS.bindActions();
     RS.bindSupp();
+    RS.bindSectionDrop();
 
     var resizeTimer = null;
     window.addEventListener("resize", function () {

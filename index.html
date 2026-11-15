@@ -43,7 +43,10 @@
 
 <main>
   <div id="sections"></div>
-  <button id="addSection" type="button" title="セクションを追加">+</button>
+  <div class="section-add-row">
+    <button id="addSection" type="button" title="セクションを追加">+</button>
+    <button id="dupSection" type="button" title="既存の週課と同じキャラクター群を持つ週課を追加します">週課を複製</button>
+  </div>
 
   <section class="supp" id="supp">
     <div class="supp-head">
@@ -78,6 +81,18 @@
   </div>
 </div>
 
+<div id="dupModal" role="dialog" aria-modal="true" aria-labelledby="dupTitle">
+  <div class="dialog">
+    <h2 id="dupTitle">複製する週課を選択</h2>
+    <p>選択した週課と同じキャラクター群を持つ週課を、新しく追加します。チェックは外した状態で作られ、タイトルは追加後に編集できます。</p>
+    <div id="dupList" class="dup-list"></div>
+    <div class="dialog-actions">
+      <button id="dupCancel" type="button">キャンセル</button>
+      <button id="dupOk" type="button">複製</button>
+    </div>
+  </div>
+</div>
+
 <div id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
   <div class="dialog help-dialog">
     <h2 id="helpTitle">使い方</h2>
@@ -108,6 +123,8 @@
       <h3>5. 週課セクション</h3>
       <ul>
         <li>ヒペリオンとタビアクートは固定です。「+」で週課を追加でき、追加分は名前変更と削除ができます。</li>
+        <li>「週課を複製」で、選んだ週課と同じキャラクター群を持つ週課を追加できます。タイトルは追加後に編集できます。</li>
+        <li>週課の見出し左端の帯をドラッグすると、週課の順番を並べ替えられます。</li>
         <li>ヒペリオンの「テイマ」「とどめ」では、それぞれ対象のキャラを選べます。</li>
         <li>タビアクートの数字欄は、全アカウント分の合計が「タビかけ」として見出しに表示されます。</li>
         <li>アカウント見出しの「✕」で、その週課からそのアカウントのキャラをまとめて外せます。</li>
