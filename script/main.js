@@ -10,6 +10,7 @@
     RS.renderTargets();
     RS.renderAccountSelects();
     RS.renderSupp();
+    RS.renderFreeMemo();
     RS.refreshProgress();
     RS.fitAll();   // DOMに追加された後でサイズを計算
   };
@@ -20,6 +21,7 @@
     RS.bindBackup();
     RS.bindActions();
     RS.bindSupp();
+    RS.bindFreeMemo();
     RS.bindSectionDrop();
 
     var resizeTimer = null;

@@ -59,6 +59,8 @@
     </div>
     <div id="suppList"></div>
     <div id="suppPool" class="supp-pool"></div>
+    <div class="free-memo-title">自由メモ</div>
+    <textarea id="freeMemo" class="free-memo" spellcheck="false" placeholder="自由にメモを入力できます(自動で保存されます)"></textarea>
   </section>
 </main>
 
@@ -134,6 +136,7 @@
         <li>週課のキャラは、初期状態では補足情報に表示されません。下の「補足情報に追加できるキャラ」から、記録したいキャラをクリックして追加します。</li>
         <li>表示中のキャラは、月(1〜12)と補足メモを記録できます。不要になったら「非表示」で一覧に戻せます。週課のキャラは消えません。</li>
         <li>週課に参加しないキャラは、この欄の「キャラ追加」で登録できます。この欄だけのキャラは「✕」で削除できます。</li>
+        <li>最下部の「自由メモ」には、自由に文章を書けます。自動で保存され、クリアでは消えません。</li>
       </ul>
       <h3>7. 保存とバックアップ</h3>
       <ul>
@@ -160,6 +163,7 @@
 <script src="script/backup.js"></script>
 <script src="script/actions.js"></script>
 <script src="script/supp.js"></script>
+<script src="script/freememo.js"></script>
 <script src="script/section-view.js"></script>
 <script src="script/main.js"></script>
 </body>

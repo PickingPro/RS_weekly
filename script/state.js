@@ -121,11 +121,14 @@
     }
     d.suppShown = sc;
     delete d.suppHidden;
+
+    // 補足情報欄の最下部「自由メモ」
+    d.memoText = typeof d.memoText === "string" ? d.memoText : "";
     return d;
   };
 
   RS.defaultState = function () {
-    return RS.normalize({ accounts: [], sections: [], extra: [], notes: {}, suppOrder: {}, suppShown: {} });
+    return RS.normalize({ accounts: [], sections: [], extra: [], notes: {}, suppOrder: {}, suppShown: {}, memoText: "" });
   };
 
   RS.nextColorIndex = function () {
