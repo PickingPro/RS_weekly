@@ -1,4 +1,4 @@
-// 週課の追加・複製・クリア(元に戻す付き)・全データ初期化
+// 週課の追加・複製・クリア(元に戻す付き)・初期化(表示中のページに応じて週課/レイドへ振り分け)
 (function () {
   "use strict";
 
@@ -94,13 +94,13 @@
     }
     RS.openConfirm({
       title: "チェックをすべて外しますか?",
-      text: "全キャラのチェックを外します。ヒペリオンの選択、タビアクートの数字・チケット、補足情報は消えません。\n実行後、5秒間だけ「元に戻す」で取り消せます。",
+      text: "全キャラのチェックを外します。ヒペリオンの選択、タビアクートの数字・チケット、補足情報は消えません。レイドのデータには影響しません。\n実行後、5秒間だけ「元に戻す」で取り消せます。",
       okLabel: "クリア",
       onOk: doClear
     });
   }
 
-  /* ---------- 全データを削除して初期状態へ ---------- */
+  /* ---------- 週課のデータを削除して初期状態へ(レイドは影響しない) ---------- */
   function resetAll() {
     RS.hideToast();
     RS.state = RS.defaultState();
@@ -117,17 +117,25 @@
     RS.render();
   }
 
+  function requestReset() {
+    RS.openConfirm({
+      title: "週課のデータを初期化しますか?",
+      text: "週課のすべてのデータ(アカウント、キャラクター、補足情報、ヒペリオンの選択内容を含む)を削除し、「ヒペリオン」「タビアクート」だけの初期状態に戻します。レイドのデータは消えません。この操作は元に戻せません。必要であれば先にエクスポートしてください。",
+      okLabel: "初期化",
+      onOk: resetAll
+    });
+  }
+
   RS.bindActions = function () {
     $("addSection").addEventListener("click", addSection);
     $("dupSection").addEventListener("click", function () { RS.openDup(duplicateSections); });
-    $("clearBtn").addEventListener("click", requestClear);
+
+    // 右上の「クリア」・右下の「初期化」は、表示中のページに応じて動作する
+    $("clearBtn").addEventListener("click", function () {
+      if (RS.view === "raid") RS.requestRaidClear(); else requestClear();
+    });
     $("resetFab").addEventListener("click", function () {
-      RS.openConfirm({
-        title: "全データを初期化しますか?",
-        text: "保存されているすべてのデータ(アカウント、キャラクター、補足情報、ヒペリオンの選択内容を含む)を削除し、「ヒペリオン」「タビアクート」だけの初期状態に戻します。この操作は元に戻せません。必要であれば先にエクスポートしてください。",
-        okLabel: "初期化",
-        onOk: resetAll
-      });
+      if (RS.view === "raid") RS.requestRaidReset(); else requestReset();
     });
   };
 })();

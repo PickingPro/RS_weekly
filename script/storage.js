@@ -1,10 +1,12 @@
-// IndexedDB の読み書き
+// IndexedDB の読み書き(週課=state、レイド=raid は別のキーで保存する)
 (function () {
   "use strict";
 
   var RS = window.RS;
   var saveChain = Promise.resolve();
   var saveWarned = false;
+
+  RS.RAID_KEY = "raid";
 
   RS.openDB = function () {
     return new Promise(function (resolve, reject) {
@@ -35,18 +37,33 @@
     }
   }
 
-  RS.save = function () {
+  function put(key, value) {
     if (!RS.db) return;
-    var snap = JSON.stringify(RS.state);
+    var snap = JSON.stringify(value);
     saveChain = saveChain.then(function () {
-      return RS.idbRun("readwrite", function (s) { return s.put(JSON.parse(snap), RS.REC_KEY); });
+      return RS.idbRun("readwrite", function (s) { return s.put(JSON.parse(snap), key); });
     }).catch(warnSave);
-  };
+  }
 
+  // 週課のデータを保存
+  RS.save = function () { put(RS.REC_KEY, RS.state); };
+
+  // レイドのデータを保存
+  RS.saveRaid = function () { put(RS.RAID_KEY, RS.raid); };
+
+  // 週課のデータだけを削除する(レイドのデータは消さない)
   RS.wipeStorage = function () {
     if (!RS.db) return;
     saveChain = saveChain.then(function () {
-      return RS.idbRun("readwrite", function (s) { return s.clear(); });
+      return RS.idbRun("readwrite", function (s) { return s.delete(RS.REC_KEY); });
+    }).catch(warnSave);
+  };
+
+  // レイドのデータだけを削除する(週課のデータは消さない)
+  RS.wipeRaid = function () {
+    if (!RS.db) return;
+    saveChain = saveChain.then(function () {
+      return RS.idbRun("readwrite", function (s) { return s.delete(RS.RAID_KEY); });
     }).catch(warnSave);
   };
 })();
