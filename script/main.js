@@ -4,6 +4,7 @@
 
   var RS = window.RS;
 
+  // 週課ページの描画(レイドは RS.renderRaid で別に描画する)
   RS.render = function () {
     RS.sanitizePicks();
     RS.renderSections();
@@ -23,11 +24,17 @@
     RS.bindSupp();
     RS.bindFreeMemo();
     RS.bindSectionDrop();
+    RS.bindRaid();
+    RS.bindView();
 
     var resizeTimer = null;
     window.addEventListener("resize", function () {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(function () { RS.fitAll(); RS.growBulk(); }, 60);
+      resizeTimer = setTimeout(function () {
+        RS.fitAll();
+        RS.growBulk();
+        RS.growRaidBulk();
+      }, 60);
     });
   }
 
@@ -39,17 +46,23 @@
       })
       .then(function (rec) {
         RS.state = rec ? RS.normalize(rec) : RS.defaultState();
+        return RS.idbRun("readonly", function (s) { return s.get(RS.RAID_KEY); });
+      })
+      .then(function (raid) {
+        RS.raid = raid ? RS.normalizeRaid(raid) : RS.defaultRaid();
       })
       .catch(function (e) {
         // 読み込めない場合、既存データを上書きしないよう保存を無効にする
         console.error(e);
         RS.db = null;
         RS.state = RS.defaultState();
+        RS.raid = RS.defaultRaid();
         alert("IndexedDBを利用できないため、データの保存・復元ができません。ブラウザの設定を確認してください。");
       })
       .then(function () {
         bindEvents();
         RS.render();
+        RS.renderRaid();
         // アカウントが1件もないときは、追加メニューを開いた状態で始める
         if (!RS.state.accounts.length) RS.setAddPanel(true);
         // ブラウザによる自動削除の対象外にするよう要求(許可はブラウザ次第)

@@ -5,27 +5,44 @@
   var RS = window.RS;
   var $ = RS.$, el = RS.el, uid = RS.uid;
 
-  /* ---------- 追加メニューの開閉 ---------- */
+  /* ---------- 追加メニューの開閉(表示中のページ用のパネルを対象にする) ---------- */
   function growBulk() {
     var t = $("bulkName");
-    if (!t.offsetParent) return;   // 折りたたみ中は何もしない
+    if (!t.offsetParent) return;   // 折りたたみ中・非表示中は何もしない
     t.style.height = "auto";
     t.style.height = t.scrollHeight + 2 + "px";
   }
   RS.growBulk = growBulk;
 
-  RS.setAddPanel = function (open) {
-    $("addPanel").classList.toggle("collapsed", !open);
+  function curPanel() {
+    return $(RS.view === "raid" ? "raidAddPanel" : "addPanel");
+  }
+
+  // ボタンの表示(矢印・aria)を、表示中のパネルの開閉状態に合わせる
+  RS.syncAddBtn = function () {
+    var open = !curPanel().classList.contains("collapsed");
     $("addMenuBtn").setAttribute("aria-expanded", open ? "true" : "false");
     $("addMenuBtn").querySelector(".am-arrow").textContent = open ? "▾" : "▸";
-    if (open) growBulk();
+  };
+
+  RS.setAddPanel = function (open) {
+    curPanel().classList.toggle("collapsed", !open);
+    RS.syncAddBtn();
+    if (open) {
+      if (RS.view === "raid") RS.growRaidBulk(); else growBulk();
+    }
   };
 
   function toggleAddPanel() {
-    var open = $("addPanel").classList.contains("collapsed");
+    var open = curPanel().classList.contains("collapsed");
     RS.setAddPanel(open);
     if (open) {
-      var target = RS.state.accounts.length ? $("bulkName") : $("accountName");
+      var target;
+      if (RS.view === "raid") {
+        target = RS.raid.accounts.length ? $("raidBulkName") : $("raidAccountName");
+      } else {
+        target = RS.state.accounts.length ? $("bulkName") : $("accountName");
+      }
       target.focus();
     }
   }

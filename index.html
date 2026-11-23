@@ -6,17 +6,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>REDSTONE コンテンツ管理ツール</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/raid.css">
 </head>
 <body>
 <header>
   <div class="top-row">
-    <h1><span class="game">REDSTONE</span> コンテンツ管理ツール</h1>
+    <h1><span class="game">REDSTONE</span> コンテンツ管理ツール <span class="view-label" id="viewLabel">週課</span></h1>
     <div class="top-actions">
-      <button id="addMenuBtn" type="button" aria-expanded="false" aria-controls="addPanel" title="アカウント・キャラの追加、バックアップの欄を開閉します"><span class="am-arrow">▸</span>追加メニュー</button>
+      <button id="switchBtn" type="button" title="レイドのページに切り替えます">レイド</button>
+      <button id="addMenuBtn" type="button" aria-expanded="false" title="アカウント・キャラの追加、バックアップの欄を開閉します"><span class="am-arrow">▸</span>追加メニュー</button>
       <button id="helpBtn" type="button" title="使い方を表示します"><span class="help-mark">?</span>使い方</button>
       <button id="clearBtn" type="button">クリア</button>
     </div>
   </div>
+
+  <!-- 週課用の追加メニュー -->
   <div class="bulk-row collapsed" id="addPanel">
     <div class="bulk-line">
       <span class="bulk-title">アカウント追加</span>
@@ -33,15 +37,35 @@
       <div id="bulkTargets"></div>
       <button id="bulkAdd" type="button">キャラ追加</button>
       <div class="io-buttons">
-        <button id="exportBtn" class="btn-io" type="button" title="データをJSONファイルに書き出します">エクスポート</button>
+        <button id="exportBtn" class="btn-io" type="button" title="週課とレイドのデータをJSONファイルに書き出します">エクスポート</button>
         <button id="importBtn" class="btn-io" type="button" title="エクスポートしたJSONファイルを読み込みます">インポート</button>
-        <input id="importFile" type="file" accept=".json,application/json" hidden>
+      </div>
+    </div>
+  </div>
+
+  <!-- レイド用の追加メニュー -->
+  <div class="bulk-row collapsed" id="raidAddPanel" hidden>
+    <div class="bulk-line">
+      <span class="bulk-title">アカウント追加</span>
+      <input id="raidAccountName" type="text" placeholder="アカウント名を入力" autocomplete="off">
+      <button id="raidAccountAdd" type="button">アカウント追加</button>
+    </div>
+    <div class="bulk-line">
+      <span class="bulk-title">キャラ一括追加</span>
+      <textarea id="raidBulkName" rows="1" wrap="soft" spellcheck="false" placeholder="キャラ名を入力(スペース・改行区切りで複数追加できます)"></textarea>
+      <select id="raidBulkAccount" title="追加先アカウント" aria-label="追加先アカウント"></select>
+      <div id="raidBulkTargets"></div>
+      <button id="raidBulkAdd" type="button">キャラ追加</button>
+      <div class="io-buttons">
+        <button id="raidExportBtn" class="btn-io" type="button" title="週課とレイドのデータをJSONファイルに書き出します">エクスポート</button>
+        <button id="raidImportBtn" class="btn-io" type="button" title="エクスポートしたJSONファイルを読み込みます">インポート</button>
       </div>
     </div>
   </div>
 </header>
 
-<main>
+<!-- 週課ページ -->
+<main id="weeklyView">
   <div id="sections"></div>
   <div class="section-add-row">
     <button id="addSection" type="button" title="セクションを追加">+</button>
@@ -64,7 +88,17 @@
   </section>
 </main>
 
-<button id="resetFab" type="button" title="全データを初期化" aria-label="全データを初期化">初期化</button>
+<!-- レイドページ -->
+<main id="raidView" hidden>
+  <div id="raidSections"></div>
+  <div class="section-add-row">
+    <button id="raidAddSection" type="button" title="セクションを追加">+</button>
+  </div>
+</main>
+
+<input id="importFile" type="file" accept=".json,application/json" hidden>
+
+<button id="resetFab" type="button" title="週課のデータを初期化" aria-label="初期化">初期化</button>
 
 <div id="toast" role="status" aria-live="polite">
   <span id="toastMsg"></span>
@@ -141,8 +175,16 @@
       <h3>7. 保存とバックアップ</h3>
       <ul>
         <li>入力内容は自動でブラウザ内に保存されます。</li>
-        <li>「追加メニュー」内の「エクスポート」「インポート」で、バックアップや別のブラウザへの移行ができます。定期的な保存をおすすめします。</li>
-        <li>右下の「初期化」は、全データを削除します。元に戻せません。</li>
+        <li>「追加メニュー」内の「エクスポート」「インポート」で、バックアップや別のブラウザへの移行ができます。週課とレイドの両方が対象です。</li>
+        <li>右下の「初期化」は、表示中のページ(週課またはレイド)のデータだけを削除します。元に戻せません。</li>
+      </ul>
+      <h3>8. レイド</h3>
+      <ul>
+        <li>ヘッダーの「レイド」ボタンでレイドのページに切り替わり、「週課」ボタンで戻ります。</li>
+        <li>レイドのアカウント・キャラは、週課とは別に管理します。登録は、レイド側の「追加メニュー」から行います。</li>
+        <li>骸骨王・ドラゴート・ソメル・ノチェス・ケルベロスは固定です。「+」でセクションを追加できます。</li>
+        <li>キャラごとの「−」「+」で、0〜3の数を増減できます。</li>
+        <li>レイドの「クリア」は、全キャラのカウントを0に戻します。確認後、5秒間だけ「元に戻す」で取り消せます。月初のリセットにお使いください。</li>
       </ul>
     </div>
     <div class="dialog-actions">
@@ -165,6 +207,8 @@
 <script src="script/supp.js"></script>
 <script src="script/freememo.js"></script>
 <script src="script/section-view.js"></script>
+<script src="script/raid.js"></script>
+<script src="script/view.js"></script>
 <script src="script/main.js"></script>
 </body>
 </html>
